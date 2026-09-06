@@ -113,11 +113,11 @@ IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_m
     ALTER TABLE [core].[MemberVerification] WITH CHECK CHECK CONSTRAINT [FK_MemberVerification_member_id];
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_evidence_attachment_id' AND parent_object_id = OBJECT_ID(N'[core].[MemberVerification]'))
-    ALTER TABLE [core].[MemberVerification] WITH CHECK ADD CONSTRAINT [FK_MemberVerification_evidence_attachment_id] FOREIGN KEY ([evidence_attachment_id]) REFERENCES [chat].[Attachment] ([attachment_id]);
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_evidence_file_asset_id' AND parent_object_id = OBJECT_ID(N'[core].[MemberVerification]'))
+    ALTER TABLE [core].[MemberVerification] WITH CHECK ADD CONSTRAINT [FK_MemberVerification_evidence_file_asset_id] FOREIGN KEY ([evidence_file_asset_id]) REFERENCES [storage].[FileAsset] ([file_asset_id]);
 GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_evidence_attachment_id' AND is_not_trusted = 1)
-    ALTER TABLE [core].[MemberVerification] WITH CHECK CHECK CONSTRAINT [FK_MemberVerification_evidence_attachment_id];
+IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_evidence_file_asset_id' AND is_not_trusted = 1)
+    ALTER TABLE [core].[MemberVerification] WITH CHECK CHECK CONSTRAINT [FK_MemberVerification_evidence_file_asset_id];
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_reviewed_by' AND parent_object_id = OBJECT_ID(N'[core].[MemberVerification]'))
@@ -148,11 +148,11 @@ IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PrivacyRequest_membe
     ALTER TABLE [consent].[PrivacyRequest] WITH CHECK CHECK CONSTRAINT [FK_PrivacyRequest_member_id];
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PrivacyRequest_result_attachment_id' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequest]'))
-    ALTER TABLE [consent].[PrivacyRequest] WITH CHECK ADD CONSTRAINT [FK_PrivacyRequest_result_attachment_id] FOREIGN KEY ([result_attachment_id]) REFERENCES [chat].[Attachment] ([attachment_id]);
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PrivacyRequest_result_file_asset_id' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequest]'))
+    ALTER TABLE [consent].[PrivacyRequest] WITH CHECK ADD CONSTRAINT [FK_PrivacyRequest_result_file_asset_id] FOREIGN KEY ([result_file_asset_id]) REFERENCES [storage].[FileAsset] ([file_asset_id]);
 GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PrivacyRequest_result_attachment_id' AND is_not_trusted = 1)
-    ALTER TABLE [consent].[PrivacyRequest] WITH CHECK CHECK CONSTRAINT [FK_PrivacyRequest_result_attachment_id];
+IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PrivacyRequest_result_file_asset_id' AND is_not_trusted = 1)
+    ALTER TABLE [consent].[PrivacyRequest] WITH CHECK CHECK CONSTRAINT [FK_PrivacyRequest_result_file_asset_id];
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Event_community_id' AND parent_object_id = OBJECT_ID(N'[event].[Event]'))
@@ -328,20 +328,6 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Message_sender_m
 GO
 IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Message_sender_member_id' AND is_not_trusted = 1)
     ALTER TABLE [chat].[Message] WITH CHECK CHECK CONSTRAINT [FK_Message_sender_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Attachment_message_id' AND parent_object_id = OBJECT_ID(N'[chat].[Attachment]'))
-    ALTER TABLE [chat].[Attachment] WITH CHECK ADD CONSTRAINT [FK_Attachment_message_id] FOREIGN KEY ([message_id]) REFERENCES [chat].[Message] ([message_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Attachment_message_id' AND is_not_trusted = 1)
-    ALTER TABLE [chat].[Attachment] WITH CHECK CHECK CONSTRAINT [FK_Attachment_message_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Attachment_owner_member_id' AND parent_object_id = OBJECT_ID(N'[chat].[Attachment]'))
-    ALTER TABLE [chat].[Attachment] WITH CHECK ADD CONSTRAINT [FK_Attachment_owner_member_id] FOREIGN KEY ([owner_member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Attachment_owner_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [chat].[Attachment] WITH CHECK CHECK CONSTRAINT [FK_Attachment_owner_member_id];
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MessageReceipt_message_id' AND parent_object_id = OBJECT_ID(N'[chat].[MessageReceipt]'))
@@ -698,10 +684,6 @@ IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Message_mes
     ALTER TABLE [chat].[Message] WITH CHECK ADD CONSTRAINT [CK_Message_message_type] CHECK ([message_type] IN (N'TEXT',N'FILE',N'SYSTEM'));
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Attachment_scan_status' AND parent_object_id = OBJECT_ID(N'[chat].[Attachment]'))
-    ALTER TABLE [chat].[Attachment] WITH CHECK ADD CONSTRAINT [CK_Attachment_scan_status] CHECK ([scan_status] IN (N'PENDING',N'CLEAN',N'REJECTED',N'ERROR'));
-GO
-
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NotificationPolicy_channel' AND parent_object_id = OBJECT_ID(N'[notification].[NotificationPolicy]'))
     ALTER TABLE [notification].[NotificationPolicy] WITH CHECK ADD CONSTRAINT [CK_NotificationPolicy_channel] CHECK ([channel] IN (N'PUSH',N'EMAIL',N'IN_APP'));
 GO
@@ -834,8 +816,8 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[C
     CREATE UNIQUE INDEX [UX_Community_Name] ON [core].[Community] ([name]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberIdentity]') AND name = N'UX_MemberIdentity_ProviderSubject')
-    CREATE UNIQUE INDEX [UX_MemberIdentity_ProviderSubject] ON [iam].[MemberIdentity] ([provider], [provider_subject]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberIdentity]') AND name = N'UX_MemberIdentity_ProviderSubjectHash')
+    CREATE UNIQUE INDEX [UX_MemberIdentity_ProviderSubjectHash] ON [iam].[MemberIdentity] ([provider], [provider_subject_hash]);
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberIdentity]') AND name = N'UX_MemberIdentity_Primary')
@@ -904,10 +886,6 @@ GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Message]') AND name = N'UX_Message_ConversationMessage')
     CREATE UNIQUE INDEX [UX_Message_ConversationMessage] ON [chat].[Message] ([conversation_id], [message_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Attachment]') AND name = N'UX_Attachment_BlobPathHash')
-    CREATE UNIQUE INDEX [UX_Attachment_BlobPathHash] ON [chat].[Attachment] ([blob_path_hash]);
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[NotificationPolicy]') AND name = N'UX_NotificationPolicy_Version')
@@ -1034,149 +1012,63 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[analytic
     CREATE INDEX [IX_ProductEvent_NameOccurred] ON [analytics].[ProductEvent] ([event_name], [occurred_at]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberRole]') AND name = N'IX_MemberRole_member_id')
-    CREATE INDEX [IX_MemberRole_member_id] ON [iam].[MemberRole] ([member_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberRole]') AND name = N'IX_MemberRole_role_code')
-    CREATE INDEX [IX_MemberRole_role_code] ON [iam].[MemberRole] ([role_code]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberRole]') AND name = N'IX_MemberRole_granted_by')
     CREATE INDEX [IX_MemberRole_granted_by] ON [iam].[MemberRole] ([granted_by]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberDevice]') AND name = N'IX_MemberDevice_member_id')
-    CREATE INDEX [IX_MemberDevice_member_id] ON [iam].[MemberDevice] ([member_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[OrganizationMember]') AND name = N'IX_OrganizationMember_member_id')
-    CREATE INDEX [IX_OrganizationMember_member_id] ON [core].[OrganizationMember] ([member_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberProfile]') AND name = N'IX_MemberProfile_member_id')
-    CREATE INDEX [IX_MemberProfile_member_id] ON [core].[MemberProfile] ([member_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[Sector]') AND name = N'IX_Sector_parent_sector_code')
-    CREATE INDEX [IX_Sector_parent_sector_code] ON [core].[Sector] ([parent_sector_code]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberSector]') AND name = N'IX_MemberSector_sector_code')
-    CREATE INDEX [IX_MemberSector_sector_code] ON [core].[MemberSector] ([sector_code]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[ProfileFieldVisibility]') AND name = N'IX_ProfileFieldVisibility_member_id')
-    CREATE INDEX [IX_ProfileFieldVisibility_member_id] ON [core].[ProfileFieldVisibility] ([member_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberVerification]') AND name = N'IX_MemberVerification_member_id')
-    CREATE INDEX [IX_MemberVerification_member_id] ON [core].[MemberVerification] ([member_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberVerification]') AND name = N'IX_MemberVerification_evidence_attachment_id')
-    CREATE INDEX [IX_MemberVerification_evidence_attachment_id] ON [core].[MemberVerification] ([evidence_attachment_id]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberVerification]') AND name = N'IX_MemberVerification_evidence_file_asset_id')
+    CREATE INDEX [IX_MemberVerification_evidence_file_asset_id] ON [core].[MemberVerification] ([evidence_file_asset_id]);
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberVerification]') AND name = N'IX_MemberVerification_reviewed_by')
     CREATE INDEX [IX_MemberVerification_reviewed_by] ON [core].[MemberVerification] ([reviewed_by]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[MemberConsent]') AND name = N'IX_MemberConsent_member_id')
-    CREATE INDEX [IX_MemberConsent_member_id] ON [consent].[MemberConsent] ([member_id]);
+
+
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequest]') AND name = N'IX_PrivacyRequest_result_file_asset_id')
+    CREATE INDEX [IX_PrivacyRequest_result_file_asset_id] ON [consent].[PrivacyRequest] ([result_file_asset_id]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[MemberConsent]') AND name = N'IX_MemberConsent_policy_id')
-    CREATE INDEX [IX_MemberConsent_policy_id] ON [consent].[MemberConsent] ([policy_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequest]') AND name = N'IX_PrivacyRequest_member_id')
-    CREATE INDEX [IX_PrivacyRequest_member_id] ON [consent].[PrivacyRequest] ([member_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequest]') AND name = N'IX_PrivacyRequest_result_attachment_id')
-    CREATE INDEX [IX_PrivacyRequest_result_attachment_id] ON [consent].[PrivacyRequest] ([result_attachment_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[Event]') AND name = N'IX_Event_venue_id')
-    CREATE INDEX [IX_Event_venue_id] ON [event].[Event] ([venue_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventRegistration]') AND name = N'IX_EventRegistration_member_id')
-    CREATE INDEX [IX_EventRegistration_member_id] ON [event].[EventRegistration] ([member_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[LiveModeSession]') AND name = N'IX_LiveModeSession_member_id')
-    CREATE INDEX [IX_LiveModeSession_member_id] ON [event].[LiveModeSession] ([member_id]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[LiveModeSession]') AND name = N'IX_LiveModeSession_consent_record_id')
     CREATE INDEX [IX_LiveModeSession_consent_record_id] ON [event].[LiveModeSession] ([consent_record_id]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventPresence]') AND name = N'IX_EventPresence_live_session_id')
-    CREATE INDEX [IX_EventPresence_live_session_id] ON [event].[EventPresence] ([live_session_id]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[ConnectionRequest]') AND name = N'IX_ConnectionRequest_match_result_id')
     CREATE INDEX [IX_ConnectionRequest_match_result_id] ON [social].[ConnectionRequest] ([match_result_id]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[Connection]') AND name = N'IX_Connection_member_high_id')
-    CREATE INDEX [IX_Connection_member_high_id] ON [social].[Connection] ([member_high_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[MemberBlock]') AND name = N'IX_MemberBlock_blocked_member_id')
-    CREATE INDEX [IX_MemberBlock_blocked_member_id] ON [social].[MemberBlock] ([blocked_member_id]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[MemberReport]') AND name = N'IX_MemberReport_reporter_member_id')
     CREATE INDEX [IX_MemberReport_reporter_member_id] ON [social].[MemberReport] ([reporter_member_id]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[MemberReport]') AND name = N'IX_MemberReport_reported_member_id')
-    CREATE INDEX [IX_MemberReport_reported_member_id] ON [social].[MemberReport] ([reported_member_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[ConversationParticipant]') AND name = N'IX_ConversationParticipant_conversation_id')
-    CREATE INDEX [IX_ConversationParticipant_conversation_id] ON [chat].[ConversationParticipant] ([conversation_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[ConversationParticipant]') AND name = N'IX_ConversationParticipant_member_id')
-    CREATE INDEX [IX_ConversationParticipant_member_id] ON [chat].[ConversationParticipant] ([member_id]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[ConversationParticipant]') AND name = N'IX_ConversationParticipant_last_read_message_id')
     CREATE INDEX [IX_ConversationParticipant_last_read_message_id] ON [chat].[ConversationParticipant] ([last_read_message_id]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Message]') AND name = N'IX_Message_sender_member_id')
-    CREATE INDEX [IX_Message_sender_member_id] ON [chat].[Message] ([sender_member_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Attachment]') AND name = N'IX_Attachment_message_id')
-    CREATE INDEX [IX_Attachment_message_id] ON [chat].[Attachment] ([message_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Attachment]') AND name = N'IX_Attachment_owner_member_id')
-    CREATE INDEX [IX_Attachment_owner_member_id] ON [chat].[Attachment] ([owner_member_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[MessageReceipt]') AND name = N'IX_MessageReceipt_message_id')
-    CREATE INDEX [IX_MessageReceipt_message_id] ON [chat].[MessageReceipt] ([message_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[MessageReceipt]') AND name = N'IX_MessageReceipt_member_id')
-    CREATE INDEX [IX_MessageReceipt_member_id] ON [chat].[MessageReceipt] ([member_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[NotificationPreference]') AND name = N'IX_NotificationPreference_member_id')
-    CREATE INDEX [IX_NotificationPreference_member_id] ON [notification].[NotificationPreference] ([member_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[PushToken]') AND name = N'IX_PushToken_device_id')
-    CREATE INDEX [IX_PushToken_device_id] ON [notification].[PushToken] ([device_id]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[Notification]') AND name = N'IX_Notification_notification_policy_id')
     CREATE INDEX [IX_Notification_notification_policy_id] ON [notification].[Notification] ([notification_policy_id]);
@@ -1190,9 +1082,6 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notifica
     CREATE INDEX [IX_NotificationDeliveryAttempt_push_token_id] ON [notification].[NotificationDeliveryAttempt] ([push_token_id]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpIntent]') AND name = N'IX_NlpIntent_member_id')
-    CREATE INDEX [IX_NlpIntent_member_id] ON [nlp].[NlpIntent] ([member_id]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpEmbedding]') AND name = N'IX_NlpEmbedding_model_version')
     CREATE INDEX [IX_NlpEmbedding_model_version] ON [nlp].[NlpEmbedding] ([model_version]);
@@ -1234,13 +1123,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[Nl
     CREATE INDEX [IX_NlpFeedback_candidate_id] ON [nlp].[NlpFeedback] ([candidate_id]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchSuppression]') AND name = N'IX_MatchSuppression_member_id')
-    CREATE INDEX [IX_MatchSuppression_member_id] ON [nlp].[MatchSuppression] ([member_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchSuppression]') AND name = N'IX_MatchSuppression_intent_id')
-    CREATE INDEX [IX_MatchSuppression_intent_id] ON [nlp].[MatchSuppression] ([intent_id]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchSuppression]') AND name = N'IX_MatchSuppression_created_by')
     CREATE INDEX [IX_MatchSuppression_created_by] ON [nlp].[MatchSuppression] ([created_by]);
@@ -1250,42 +1133,406 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[Ev
     CREATE INDEX [IX_EvaluationDataset_approved_by] ON [nlp].[EvaluationDataset] ([approved_by]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationPair]') AND name = N'IX_EvaluationPair_dataset_id')
-    CREATE INDEX [IX_EvaluationPair_dataset_id] ON [nlp].[EvaluationPair] ([dataset_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationRun]') AND name = N'IX_EvaluationRun_dataset_id')
-    CREATE INDEX [IX_EvaluationRun_dataset_id] ON [nlp].[EvaluationRun] ([dataset_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationRun]') AND name = N'IX_EvaluationRun_model_version')
-    CREATE INDEX [IX_EvaluationRun_model_version] ON [nlp].[EvaluationRun] ([model_version]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationRun]') AND name = N'IX_EvaluationRun_ranking_version')
     CREATE INDEX [IX_EvaluationRun_ranking_version] ON [nlp].[EvaluationRun] ([ranking_version]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationCase]') AND name = N'IX_ModerationCase_subject_member_id')
-    CREATE INDEX [IX_ModerationCase_subject_member_id] ON [moderation].[ModerationCase] ([subject_member_id]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationCase]') AND name = N'IX_ModerationCase_assigned_to')
     CREATE INDEX [IX_ModerationCase_assigned_to] ON [moderation].[ModerationCase] ([assigned_to]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationAction]') AND name = N'IX_ModerationAction_moderation_case_id')
-    CREATE INDEX [IX_ModerationAction_moderation_case_id] ON [moderation].[ModerationAction] ([moderation_case_id]);
-GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationAction]') AND name = N'IX_ModerationAction_actor_member_id')
-    CREATE INDEX [IX_ModerationAction_actor_member_id] ON [moderation].[ModerationAction] ([actor_member_id]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ContentRule]') AND name = N'IX_ContentRule_created_by')
     CREATE INDEX [IX_ContentRule_created_by] ON [moderation].[ContentRule] ([created_by]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[analytics].[ProductEvent]') AND name = N'IX_ProductEvent_community_id')
-    CREATE INDEX [IX_ProductEvent_community_id] ON [analytics].[ProductEvent] ([community_id]);
+
+-- v2.3 cross-domain foreign keys.
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RolePermission_role_code' AND parent_object_id = OBJECT_ID(N'[iam].[RolePermission]'))
+    ALTER TABLE [iam].[RolePermission] WITH CHECK ADD CONSTRAINT [FK_RolePermission_role_code] FOREIGN KEY ([role_code]) REFERENCES [iam].[Role] ([role_code]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RolePermission_permission_code' AND parent_object_id = OBJECT_ID(N'[iam].[RolePermission]'))
+    ALTER TABLE [iam].[RolePermission] WITH CHECK ADD CONSTRAINT [FK_RolePermission_permission_code] FOREIGN KEY ([permission_code]) REFERENCES [iam].[Permission] ([permission_code]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RolePermission_granted_by' AND parent_object_id = OBJECT_ID(N'[iam].[RolePermission]'))
+    ALTER TABLE [iam].[RolePermission] WITH CHECK ADD CONSTRAINT [FK_RolePermission_granted_by] FOREIGN KEY ([granted_by]) REFERENCES [iam].[Member] ([member_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_AuthSession_member_id' AND parent_object_id = OBJECT_ID(N'[iam].[AuthSession]'))
+    ALTER TABLE [iam].[AuthSession] WITH CHECK ADD CONSTRAINT [FK_AuthSession_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_AuthSession_device_id' AND parent_object_id = OBJECT_ID(N'[iam].[AuthSession]'))
+    ALTER TABLE [iam].[AuthSession] WITH CHECK ADD CONSTRAINT [FK_AuthSession_device_id] FOREIGN KEY ([device_id]) REFERENCES [iam].[MemberDevice] ([device_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PrivacyRequestTask_privacy_request_id' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]'))
+    ALTER TABLE [consent].[PrivacyRequestTask] WITH CHECK ADD CONSTRAINT [FK_PrivacyRequestTask_privacy_request_id] FOREIGN KEY ([privacy_request_id]) REFERENCES [consent].[PrivacyRequest] ([privacy_request_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_FileAsset_community_id' AND parent_object_id = OBJECT_ID(N'[storage].[FileAsset]'))
+    ALTER TABLE [storage].[FileAsset] WITH CHECK ADD CONSTRAINT [FK_FileAsset_community_id] FOREIGN KEY ([community_id]) REFERENCES [core].[Community] ([community_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_FileAsset_owner_member_id' AND parent_object_id = OBJECT_ID(N'[storage].[FileAsset]'))
+    ALTER TABLE [storage].[FileAsset] WITH CHECK ADD CONSTRAINT [FK_FileAsset_owner_member_id] FOREIGN KEY ([owner_member_id]) REFERENCES [iam].[Member] ([member_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_FileAssetLink_file_asset_id' AND parent_object_id = OBJECT_ID(N'[storage].[FileAssetLink]'))
+    ALTER TABLE [storage].[FileAssetLink] WITH CHECK ADD CONSTRAINT [FK_FileAssetLink_file_asset_id] FOREIGN KEY ([file_asset_id]) REFERENCES [storage].[FileAsset] ([file_asset_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_FileAssetLink_linked_by' AND parent_object_id = OBJECT_ID(N'[storage].[FileAssetLink]'))
+    ALTER TABLE [storage].[FileAssetLink] WITH CHECK ADD CONSTRAINT [FK_FileAssetLink_linked_by] FOREIGN KEY ([linked_by]) REFERENCES [iam].[Member] ([member_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_SyncChange_community_id' AND parent_object_id = OBJECT_ID(N'[ops].[SyncChange]'))
+    ALTER TABLE [ops].[SyncChange] WITH CHECK ADD CONSTRAINT [FK_SyncChange_community_id] FOREIGN KEY ([community_id]) REFERENCES [core].[Community] ([community_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_SyncChange_member_scope_id' AND parent_object_id = OBJECT_ID(N'[ops].[SyncChange]'))
+    ALTER TABLE [ops].[SyncChange] WITH CHECK ADD CONSTRAINT [FK_SyncChange_member_scope_id] FOREIGN KEY ([member_scope_id]) REFERENCES [iam].[Member] ([member_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RetentionPolicy_approved_by' AND parent_object_id = OBJECT_ID(N'[ops].[RetentionPolicy]'))
+    ALTER TABLE [ops].[RetentionPolicy] WITH CHECK ADD CONSTRAINT [FK_RetentionPolicy_approved_by] FOREIGN KEY ([approved_by]) REFERENCES [iam].[Member] ([member_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RetentionExecution_retention_policy_id' AND parent_object_id = OBJECT_ID(N'[ops].[RetentionExecution]'))
+    ALTER TABLE [ops].[RetentionExecution] WITH CHECK ADD CONSTRAINT [FK_RetentionExecution_retention_policy_id] FOREIGN KEY ([retention_policy_id]) REFERENCES [ops].[RetentionPolicy] ([retention_policy_id]);
+GO
+
+-- v2.3 state, lifecycle and bounded-value constraints.
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Permission_action' AND parent_object_id = OBJECT_ID(N'[iam].[Permission]'))
+    ALTER TABLE [iam].[Permission] WITH CHECK ADD CONSTRAINT [CK_Permission_action] CHECK ([action] IN ('READ','CREATE','UPDATE','DELETE','APPROVE','EXPORT','CONFIGURE'));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Permission_status' AND parent_object_id = OBJECT_ID(N'[iam].[Permission]'))
+    ALTER TABLE [iam].[Permission] WITH CHECK ADD CONSTRAINT [CK_Permission_status] CHECK ([status] IN ('ACTIVE','RETIRED'));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_RolePermission_dates' AND parent_object_id = OBJECT_ID(N'[iam].[RolePermission]'))
+    ALTER TABLE [iam].[RolePermission] WITH CHECK ADD CONSTRAINT [CK_RolePermission_dates] CHECK ([revoked_at] IS NULL OR [revoked_at] >= [granted_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_AuthSession_auth_strength' AND parent_object_id = OBJECT_ID(N'[iam].[AuthSession]'))
+    ALTER TABLE [iam].[AuthSession] WITH CHECK ADD CONSTRAINT [CK_AuthSession_auth_strength] CHECK ([auth_strength] IN ('STANDARD','MFA','STEP_UP'));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_AuthSession_dates' AND parent_object_id = OBJECT_ID(N'[iam].[AuthSession]'))
+    ALTER TABLE [iam].[AuthSession] WITH CHECK ADD CONSTRAINT [CK_AuthSession_dates] CHECK ([expires_at] > [issued_at] AND [last_seen_at] >= [issued_at] AND ([revoked_at] IS NULL OR [revoked_at] >= [issued_at]));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_PrivacyRequestTask_domain' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]'))
+    ALTER TABLE [consent].[PrivacyRequestTask] WITH CHECK ADD CONSTRAINT [CK_PrivacyRequestTask_domain] CHECK ([domain_code] IN ('IAM','PROFILE','EVENT','SOCIAL','CHAT','STORAGE','NLP','ANALYTICS','AUDIT'));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_PrivacyRequestTask_action' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]'))
+    ALTER TABLE [consent].[PrivacyRequestTask] WITH CHECK ADD CONSTRAINT [CK_PrivacyRequestTask_action] CHECK ([action_type] IN ('EXPORT','CORRECT','ANONYMIZE','DELETE','RETAIN_EXCEPTION'));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_PrivacyRequestTask_state' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]'))
+    ALTER TABLE [consent].[PrivacyRequestTask] WITH CHECK ADD CONSTRAINT [CK_PrivacyRequestTask_state] CHECK ([status] IN ('PENDING','RUNNING','COMPLETED','FAILED','EXEMPTED') AND [attempt_count] >= 0 AND ([status] NOT IN ('COMPLETED','EXEMPTED') OR ([completed_at] IS NOT NULL AND [evidence_code] IS NOT NULL)));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_FileAsset_purpose' AND parent_object_id = OBJECT_ID(N'[storage].[FileAsset]'))
+    ALTER TABLE [storage].[FileAsset] WITH CHECK ADD CONSTRAINT [CK_FileAsset_purpose] CHECK ([purpose_code] IN ('CHAT_FILE','VERIFICATION_EVIDENCE','PRIVACY_EXPORT','EVALUATION_REPORT'));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_FileAsset_classification' AND parent_object_id = OBJECT_ID(N'[storage].[FileAsset]'))
+    ALTER TABLE [storage].[FileAsset] WITH CHECK ADD CONSTRAINT [CK_FileAsset_classification] CHECK ([classification] IN ('INTERNAL','CONFIDENTIAL','RESTRICTED','HIGHLY_RESTRICTED'));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_FileAsset_lifecycle' AND parent_object_id = OBJECT_ID(N'[storage].[FileAsset]'))
+    ALTER TABLE [storage].[FileAsset] WITH CHECK ADD CONSTRAINT [CK_FileAsset_lifecycle] CHECK ([size_bytes] >= 0 AND [scan_status] IN ('PENDING','CLEAN','REJECTED','ERROR') AND [lifecycle_status] IN ('UPLOADING','AVAILABLE','QUARANTINED','DELETED','EXPIRED') AND ([lifecycle_status] <> 'AVAILABLE' OR [scan_status] = 'CLEAN') AND ([lifecycle_status] NOT IN ('DELETED','EXPIRED') OR [deleted_at] IS NOT NULL));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_FileAssetLink_values' AND parent_object_id = OBJECT_ID(N'[storage].[FileAssetLink]'))
+    ALTER TABLE [storage].[FileAssetLink] WITH CHECK ADD CONSTRAINT [CK_FileAssetLink_values] CHECK ([resource_type] IN ('MESSAGE','MEMBER_VERIFICATION','PRIVACY_REQUEST','EVALUATION_RUN') AND [relationship_type] IN ('PRIMARY','EVIDENCE','RESULT','REPORT'));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_SyncChange_values' AND parent_object_id = OBJECT_ID(N'[ops].[SyncChange]'))
+    ALTER TABLE [ops].[SyncChange] WITH CHECK ADD CONSTRAINT [CK_SyncChange_values] CHECK ([change_type] IN ('UPSERT','DELETE') AND [resource_type] IN ('PROFILE','MATCH','REQUEST','CONVERSATION','MESSAGE','NOTIFICATION') AND [expires_at] > [occurred_at] AND ([payload_json] IS NULL OR ISJSON([payload_json]) = 1));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_RetentionPolicy_values' AND parent_object_id = OBJECT_ID(N'[ops].[RetentionPolicy]'))
+    ALTER TABLE [ops].[RetentionPolicy] WITH CHECK ADD CONSTRAINT [CK_RetentionPolicy_values] CHECK ([policy_version] > 0 AND [retention_days] >= 0 AND [status] IN ('DRAFT','ACTIVE','RETIRED') AND [disposition_action] IN ('DELETE','ANONYMIZE','ARCHIVE') AND ([effective_to] IS NULL OR [effective_to] > [effective_from]));
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_RetentionExecution_values' AND parent_object_id = OBJECT_ID(N'[ops].[RetentionExecution]'))
+    ALTER TABLE [ops].[RetentionExecution] WITH CHECK ADD CONSTRAINT [CK_RetentionExecution_values] CHECK ([scope_end] > [scope_start] AND [status] IN ('RUNNING','SUCCEEDED','PARTIAL','FAILED') AND [examined_count] >= 0 AND [disposed_count] >= 0 AND [skipped_hold_count] >= 0 AND [disposed_count] + [skipped_hold_count] <= [examined_count] AND ([status] = 'RUNNING' OR [completed_at] IS NOT NULL));
+GO
+
+-- v2.3 lookup, uniqueness and worker access paths.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[Permission]') AND name = N'UX_Permission_ResourceAction')
+    CREATE UNIQUE INDEX [UX_Permission_ResourceAction] ON [iam].[Permission] ([resource_type], [action]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[Permission]') AND name = N'IX_Permission_Status')
+    CREATE INDEX [IX_Permission_Status] ON [iam].[Permission] ([status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[RolePermission]') AND name = N'IX_RolePermission_PermissionRevoked')
+    CREATE INDEX [IX_RolePermission_PermissionRevoked] ON [iam].[RolePermission] ([permission_code], [revoked_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[AuthSession]') AND name = N'UX_AuthSession_ProviderSessionHash')
+    CREATE UNIQUE INDEX [UX_AuthSession_ProviderSessionHash] ON [iam].[AuthSession] ([provider_session_hash]) WHERE [provider_session_hash] IS NOT NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[AuthSession]') AND name = N'IX_AuthSession_MemberActive')
+    CREATE INDEX [IX_AuthSession_MemberActive] ON [iam].[AuthSession] ([member_id], [revoked_at], [expires_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[AuthSession]') AND name = N'IX_AuthSession_DeviceRevoked')
+    CREATE INDEX [IX_AuthSession_DeviceRevoked] ON [iam].[AuthSession] ([device_id], [revoked_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]') AND name = N'UX_PrivacyRequestTask_DomainAction')
+    CREATE UNIQUE INDEX [UX_PrivacyRequestTask_DomainAction] ON [consent].[PrivacyRequestTask] ([privacy_request_id], [domain_code], [action_type]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]') AND name = N'IX_PrivacyRequestTask_DueWork')
+    CREATE INDEX [IX_PrivacyRequestTask_DueWork] ON [consent].[PrivacyRequestTask] ([status], [updated_at]);
+GO
+-- blob_path is nvarchar(1024), which exceeds Azure SQL's index-key limit.
+-- blob_path_hash is the enforceable unique key; the file service verifies the full path on a hash match.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAsset]') AND name = N'UX_FileAsset_BlobPathHash')
+    CREATE UNIQUE INDEX [UX_FileAsset_BlobPathHash] ON [storage].[FileAsset] ([blob_path_hash]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAsset]') AND name = N'IX_FileAsset_OwnerCreated')
+    CREATE INDEX [IX_FileAsset_OwnerCreated] ON [storage].[FileAsset] ([owner_member_id], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAsset]') AND name = N'IX_FileAsset_LifecycleExpiry')
+    CREATE INDEX [IX_FileAsset_LifecycleExpiry] ON [storage].[FileAsset] ([purpose_code], [lifecycle_status], [expires_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAsset]') AND name = N'IX_FileAsset_ScanQueue')
+    CREATE INDEX [IX_FileAsset_ScanQueue] ON [storage].[FileAsset] ([scan_status], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAssetLink]') AND name = N'UX_FileAssetLink_Resource')
+    CREATE UNIQUE INDEX [UX_FileAssetLink_Resource] ON [storage].[FileAssetLink] ([file_asset_id], [resource_type], [resource_id], [relationship_type]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAssetLink]') AND name = N'IX_FileAssetLink_Resource')
+    CREATE INDEX [IX_FileAssetLink_Resource] ON [storage].[FileAssetLink] ([resource_type], [resource_id], [removed_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[SyncChange]') AND name = N'IX_SyncChange_CommunityCursor')
+    CREATE INDEX [IX_SyncChange_CommunityCursor] ON [ops].[SyncChange] ([community_id], [sync_sequence]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[SyncChange]') AND name = N'IX_SyncChange_MemberCursor')
+    CREATE INDEX [IX_SyncChange_MemberCursor] ON [ops].[SyncChange] ([member_scope_id], [sync_sequence]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[SyncChange]') AND name = N'IX_SyncChange_Expiry')
+    CREATE INDEX [IX_SyncChange_Expiry] ON [ops].[SyncChange] ([expires_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[RetentionPolicy]') AND name = N'UX_RetentionPolicy_Version')
+    CREATE UNIQUE INDEX [UX_RetentionPolicy_Version] ON [ops].[RetentionPolicy] ([resource_type], [policy_version]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[RetentionPolicy]') AND name = N'UX_RetentionPolicy_Active')
+    CREATE UNIQUE INDEX [UX_RetentionPolicy_Active] ON [ops].[RetentionPolicy] ([resource_type]) WHERE [status] = 'ACTIVE';
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[RetentionPolicy]') AND name = N'IX_RetentionPolicy_StatusEffective')
+    CREATE INDEX [IX_RetentionPolicy_StatusEffective] ON [ops].[RetentionPolicy] ([status], [effective_from]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[RetentionExecution]') AND name = N'IX_RetentionExecution_PolicyStarted')
+    CREATE INDEX [IX_RetentionExecution_PolicyStarted] ON [ops].[RetentionExecution] ([retention_policy_id], [started_at] DESC);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[RetentionExecution]') AND name = N'IX_RetentionExecution_StatusStarted')
+    CREATE INDEX [IX_RetentionExecution_StatusStarted] ON [ops].[RetentionExecution] ([status], [started_at]);
+GO
+
+-- Documented v2.3 access paths not already covered by a matching key.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[Community]') AND name = N'IX_Community_Status')
+    CREATE INDEX [IX_Community_Status] ON [core].[Community] ([status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[Organization]') AND name = N'IX_Organization_WebsiteDomain')
+    CREATE INDEX [IX_Organization_WebsiteDomain] ON [core].[Organization] ([website_domain]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[OrganizationMember]') AND name = N'UQ_OrganizationMember_OrganizationIdMemberIdStartedOn')
+    CREATE UNIQUE INDEX [UQ_OrganizationMember_OrganizationIdMemberIdStartedOn] ON [core].[OrganizationMember] ([organization_id], [member_id], [started_on]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[OrganizationMember]') AND name = N'IX_OrganizationMember_MemberIdIsPrimary')
+    CREATE INDEX [IX_OrganizationMember_MemberIdIsPrimary] ON [core].[OrganizationMember] ([member_id], [is_primary]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberProfile]') AND name = N'IX_MemberProfile_UpdatedAt')
+    CREATE INDEX [IX_MemberProfile_UpdatedAt] ON [core].[MemberProfile] ([updated_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[Sector]') AND name = N'UQ_Sector_Name')
+    CREATE UNIQUE INDEX [UQ_Sector_Name] ON [core].[Sector] ([name]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[Sector]') AND name = N'IX_Sector_ParentSectorCodeStatus')
+    CREATE INDEX [IX_Sector_ParentSectorCodeStatus] ON [core].[Sector] ([parent_sector_code], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberSector]') AND name = N'IX_MemberSector_SectorCodeMemberId')
+    CREATE INDEX [IX_MemberSector_SectorCodeMemberId] ON [core].[MemberSector] ([sector_code], [member_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberGeography]') AND name = N'IX_MemberGeography_MemberIdIsPrimary')
+    CREATE INDEX [IX_MemberGeography_MemberIdIsPrimary] ON [core].[MemberGeography] ([member_id], [is_primary]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberGeography]') AND name = N'IX_MemberGeography_CountryCodeRegionCity')
+    CREATE INDEX [IX_MemberGeography_CountryCodeRegionCity] ON [core].[MemberGeography] ([country_code], [region], [city]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[ProfileFieldVisibility]') AND name = N'IX_ProfileFieldVisibility_Audience')
+    CREATE INDEX [IX_ProfileFieldVisibility_Audience] ON [core].[ProfileFieldVisibility] ([audience]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberVerification]') AND name = N'IX_MemberVerification_MemberIdStatus')
+    CREATE INDEX [IX_MemberVerification_MemberIdStatus] ON [core].[MemberVerification] ([member_id], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberVerification]') AND name = N'IX_MemberVerification_StatusCreatedAt')
+    CREATE INDEX [IX_MemberVerification_StatusCreatedAt] ON [core].[MemberVerification] ([status], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[Member]') AND name = N'IX_Member_StatusUpdatedAt')
+    CREATE INDEX [IX_Member_StatusUpdatedAt] ON [iam].[Member] ([status], [updated_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberIdentity]') AND name = N'IX_MemberIdentity_MemberIdIsPrimary')
+    CREATE INDEX [IX_MemberIdentity_MemberIdIsPrimary] ON [iam].[MemberIdentity] ([member_id], [is_primary]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberRole]') AND name = N'IX_MemberRole_RoleCodeExpiresAt')
+    CREATE INDEX [IX_MemberRole_RoleCodeExpiresAt] ON [iam].[MemberRole] ([role_code], [expires_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberDevice]') AND name = N'IX_MemberDevice_MemberIdStatus')
+    CREATE INDEX [IX_MemberDevice_MemberIdStatus] ON [iam].[MemberDevice] ([member_id], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberDevice]') AND name = N'IX_MemberDevice_LastSeenAt')
+    CREATE INDEX [IX_MemberDevice_LastSeenAt] ON [iam].[MemberDevice] ([last_seen_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[ConsentPolicy]') AND name = N'IX_ConsentPolicy_PurposeCodeEffectiveFrom')
+    CREATE INDEX [IX_ConsentPolicy_PurposeCodeEffectiveFrom] ON [consent].[ConsentPolicy] ([purpose_code], [effective_from]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[MemberConsent]') AND name = N'IX_MemberConsent_MemberIdPolicyIdCapturedAt')
+    CREATE INDEX [IX_MemberConsent_MemberIdPolicyIdCapturedAt] ON [consent].[MemberConsent] ([member_id], [policy_id], [captured_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[MemberConsent]') AND name = N'IX_MemberConsent_PolicyIdDecision')
+    CREATE INDEX [IX_MemberConsent_PolicyIdDecision] ON [consent].[MemberConsent] ([policy_id], [decision]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequest]') AND name = N'IX_PrivacyRequest_StatusDueAt')
+    CREATE INDEX [IX_PrivacyRequest_StatusDueAt] ON [consent].[PrivacyRequest] ([status], [due_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequest]') AND name = N'IX_PrivacyRequest_MemberIdCreatedAt')
+    CREATE INDEX [IX_PrivacyRequest_MemberIdCreatedAt] ON [consent].[PrivacyRequest] ([member_id], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[Venue]') AND name = N'IX_Venue_CountryCodeRegionCity')
+    CREATE INDEX [IX_Venue_CountryCodeRegionCity] ON [event].[Venue] ([country_code], [region], [city]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[Event]') AND name = N'IX_Event_VenueIdStartsAt')
+    CREATE INDEX [IX_Event_VenueIdStartsAt] ON [event].[Event] ([venue_id], [starts_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventMatchingPolicy]') AND name = N'IX_EventMatchingPolicy_StatusEffectiveFromEffectiveTo')
+    CREATE INDEX [IX_EventMatchingPolicy_StatusEffectiveFromEffectiveTo] ON [event].[EventMatchingPolicy] ([status], [effective_from], [effective_to]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventRegistration]') AND name = N'IX_EventRegistration_MemberIdStatus')
+    CREATE INDEX [IX_EventRegistration_MemberIdStatus] ON [event].[EventRegistration] ([member_id], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventRegistration]') AND name = N'IX_EventRegistration_EventIdStatus')
+    CREATE INDEX [IX_EventRegistration_EventIdStatus] ON [event].[EventRegistration] ([event_id], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[LiveModeSession]') AND name = N'IX_LiveModeSession_EventIdStatusActiveUntil')
+    CREATE INDEX [IX_LiveModeSession_EventIdStatusActiveUntil] ON [event].[LiveModeSession] ([event_id], [status], [active_until]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[LiveModeSession]') AND name = N'IX_LiveModeSession_MemberIdStatus')
+    CREATE INDEX [IX_LiveModeSession_MemberIdStatus] ON [event].[LiveModeSession] ([member_id], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventPresence]') AND name = N'IX_EventPresence_LiveSessionIdObservedAt')
+    CREATE INDEX [IX_EventPresence_LiveSessionIdObservedAt] ON [event].[EventPresence] ([live_session_id], [observed_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[ConnectionRequest]') AND name = N'IX_ConnectionRequest_SenderMemberIdStatus')
+    CREATE INDEX [IX_ConnectionRequest_SenderMemberIdStatus] ON [social].[ConnectionRequest] ([sender_member_id], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[Connection]') AND name = N'IX_Connection_MemberLowIdStatus')
+    CREATE INDEX [IX_Connection_MemberLowIdStatus] ON [social].[Connection] ([member_low_id], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[Connection]') AND name = N'IX_Connection_MemberHighIdStatus')
+    CREATE INDEX [IX_Connection_MemberHighIdStatus] ON [social].[Connection] ([member_high_id], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[MemberBlock]') AND name = N'IX_MemberBlock_BlockedMemberIdRemovedAt')
+    CREATE INDEX [IX_MemberBlock_BlockedMemberIdRemovedAt] ON [social].[MemberBlock] ([blocked_member_id], [removed_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[MemberReport]') AND name = N'IX_MemberReport_StatusCreatedAt')
+    CREATE INDEX [IX_MemberReport_StatusCreatedAt] ON [social].[MemberReport] ([status], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[MemberReport]') AND name = N'IX_MemberReport_ReportedMemberIdCreatedAt')
+    CREATE INDEX [IX_MemberReport_ReportedMemberIdCreatedAt] ON [social].[MemberReport] ([reported_member_id], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Conversation]') AND name = N'IX_Conversation_StatusLastMessageAt')
+    CREATE INDEX [IX_Conversation_StatusLastMessageAt] ON [chat].[Conversation] ([status], [last_message_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[ConversationParticipant]') AND name = N'IX_ConversationParticipant_MemberIdLeftAt')
+    CREATE INDEX [IX_ConversationParticipant_MemberIdLeftAt] ON [chat].[ConversationParticipant] ([member_id], [left_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Message]') AND name = N'IX_Message_SenderMemberIdCreatedAt')
+    CREATE INDEX [IX_Message_SenderMemberIdCreatedAt] ON [chat].[Message] ([sender_member_id], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[MessageReceipt]') AND name = N'IX_MessageReceipt_MemberIdReadAt')
+    CREATE INDEX [IX_MessageReceipt_MemberIdReadAt] ON [chat].[MessageReceipt] ([member_id], [read_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[NotificationPolicy]') AND name = N'IX_NotificationPolicy_StatusEffectiveFromEffectiveTo')
+    CREATE INDEX [IX_NotificationPolicy_StatusEffectiveFromEffectiveTo] ON [notification].[NotificationPolicy] ([status], [effective_from], [effective_to]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[PushToken]') AND name = N'IX_PushToken_DeviceIdStatus')
+    CREATE INDEX [IX_PushToken_DeviceIdStatus] ON [notification].[PushToken] ([device_id], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[Notification]') AND name = N'IX_Notification_MemberIdCreatedAt')
+    CREATE INDEX [IX_Notification_MemberIdCreatedAt] ON [notification].[Notification] ([member_id], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[NotificationDeliveryAttempt]') AND name = N'IX_NotificationDeliveryAttempt_ProviderProviderMessageId')
+    CREATE INDEX [IX_NotificationDeliveryAttempt_ProviderProviderMessageId] ON [notification].[NotificationDeliveryAttempt] ([provider], [provider_message_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpIntent]') AND name = N'IX_NlpIntent_MemberIdStatus')
+    CREATE INDEX [IX_NlpIntent_MemberIdStatus] ON [nlp].[NlpIntent] ([member_id], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpIntent]') AND name = N'IX_NlpIntent_NormalizedHash')
+    CREATE INDEX [IX_NlpIntent_NormalizedHash] ON [nlp].[NlpIntent] ([normalized_hash]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpModelVersion]') AND name = N'IX_NlpModelVersion_StatusCreatedAt')
+    CREATE INDEX [IX_NlpModelVersion_StatusCreatedAt] ON [nlp].[NlpModelVersion] ([status], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpRankingConfig]') AND name = N'IX_NlpRankingConfig_ActiveFromActiveTo')
+    CREATE INDEX [IX_NlpRankingConfig_ActiveFromActiveTo] ON [nlp].[NlpRankingConfig] ([active_from], [active_to]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpProcessingJob]') AND name = N'IX_NlpProcessingJob_StatusAvailableAt')
+    CREATE INDEX [IX_NlpProcessingJob_StatusAvailableAt] ON [nlp].[NlpProcessingJob] ([status], [available_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchRequest]') AND name = N'IX_MatchRequest_StatusCreatedAt')
+    CREATE INDEX [IX_MatchRequest_StatusCreatedAt] ON [nlp].[MatchRequest] ([status], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchRequest]') AND name = N'IX_MatchRequest_RequestHash')
+    CREATE INDEX [IX_MatchRequest_RequestHash] ON [nlp].[MatchRequest] ([request_hash]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpFeedback]') AND name = N'IX_NlpFeedback_LabelCreatedAt')
+    CREATE INDEX [IX_NlpFeedback_LabelCreatedAt] ON [nlp].[NlpFeedback] ([label], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchSuppression]') AND name = N'IX_MatchSuppression_MemberIdContextIdEndsAt')
+    CREATE INDEX [IX_MatchSuppression_MemberIdContextIdEndsAt] ON [nlp].[MatchSuppression] ([member_id], [context_id], [ends_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchSuppression]') AND name = N'IX_MatchSuppression_IntentIdEndsAt')
+    CREATE INDEX [IX_MatchSuppression_IntentIdEndsAt] ON [nlp].[MatchSuppression] ([intent_id], [ends_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationDataset]') AND name = N'IX_EvaluationDataset_StatusCreatedAt')
+    CREATE INDEX [IX_EvaluationDataset_StatusCreatedAt] ON [nlp].[EvaluationDataset] ([status], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationPair]') AND name = N'IX_EvaluationPair_DatasetIdSplit')
+    CREATE INDEX [IX_EvaluationPair_DatasetIdSplit] ON [nlp].[EvaluationPair] ([dataset_id], [split]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationPair]') AND name = N'IX_EvaluationPair_GoldLabel')
+    CREATE INDEX [IX_EvaluationPair_GoldLabel] ON [nlp].[EvaluationPair] ([gold_label]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationRun]') AND name = N'IX_EvaluationRun_DatasetIdStartedAt')
+    CREATE INDEX [IX_EvaluationRun_DatasetIdStartedAt] ON [nlp].[EvaluationRun] ([dataset_id], [started_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationRun]') AND name = N'IX_EvaluationRun_ModelVersionRankingVersion')
+    CREATE INDEX [IX_EvaluationRun_ModelVersionRankingVersion] ON [nlp].[EvaluationRun] ([model_version], [ranking_version]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationCase]') AND name = N'IX_ModerationCase_StatusPriorityCreatedAt')
+    CREATE INDEX [IX_ModerationCase_StatusPriorityCreatedAt] ON [moderation].[ModerationCase] ([status], [priority], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationCase]') AND name = N'IX_ModerationCase_SubjectMemberIdCreatedAt')
+    CREATE INDEX [IX_ModerationCase_SubjectMemberIdCreatedAt] ON [moderation].[ModerationCase] ([subject_member_id], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationAction]') AND name = N'IX_ModerationAction_ModerationCaseIdCreatedAt')
+    CREATE INDEX [IX_ModerationAction_ModerationCaseIdCreatedAt] ON [moderation].[ModerationAction] ([moderation_case_id], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationAction]') AND name = N'IX_ModerationAction_ActorMemberIdCreatedAt')
+    CREATE INDEX [IX_ModerationAction_ActorMemberIdCreatedAt] ON [moderation].[ModerationAction] ([actor_member_id], [created_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ContentRule]') AND name = N'UQ_ContentRule_RuleTypeVersion')
+    CREATE UNIQUE INDEX [UQ_ContentRule_RuleTypeVersion] ON [moderation].[ContentRule] ([rule_type], [version]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ContentRule]') AND name = N'IX_ContentRule_RuleTypeStatus')
+    CREATE INDEX [IX_ContentRule_RuleTypeStatus] ON [moderation].[ContentRule] ([rule_type], [status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ContentScan]') AND name = N'IX_ContentScan_ResourceTypeResourceIdScannedAt')
+    CREATE INDEX [IX_ContentScan_ResourceTypeResourceIdScannedAt] ON [moderation].[ContentScan] ([resource_type], [resource_id], [scanned_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ContentScan]') AND name = N'IX_ContentScan_ResultScannedAt')
+    CREATE INDEX [IX_ContentScan_ResultScannedAt] ON [moderation].[ContentScan] ([result], [scanned_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[OutboxEvent]') AND name = N'IX_OutboxEvent_AggregateTypeAggregateIdOccurredAt')
+    CREATE INDEX [IX_OutboxEvent_AggregateTypeAggregateIdOccurredAt] ON [ops].[OutboxEvent] ([aggregate_type], [aggregate_id], [occurred_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[BackgroundJob]') AND name = N'IX_BackgroundJob_ResourceTypeResourceId')
+    CREATE INDEX [IX_BackgroundJob_ResourceTypeResourceId] ON [ops].[BackgroundJob] ([resource_type], [resource_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[AuditEvent]') AND name = N'IX_AuditEvent_ResourceTypeResourceIdOccurredAt')
+    CREATE INDEX [IX_AuditEvent_ResourceTypeResourceIdOccurredAt] ON [ops].[AuditEvent] ([resource_type], [resource_id], [occurred_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[AuditEvent]') AND name = N'IX_AuditEvent_ActorIdOccurredAt')
+    CREATE INDEX [IX_AuditEvent_ActorIdOccurredAt] ON [ops].[AuditEvent] ([actor_id], [occurred_at]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[AuditEvent]') AND name = N'IX_AuditEvent_CorrelationId')
+    CREATE INDEX [IX_AuditEvent_CorrelationId] ON [ops].[AuditEvent] ([correlation_id]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[analytics].[ProductEvent]') AND name = N'IX_ProductEvent_CommunityIdOccurredAt')
+    CREATE INDEX [IX_ProductEvent_CommunityIdOccurredAt] ON [analytics].[ProductEvent] ([community_id], [occurred_at]);
 GO

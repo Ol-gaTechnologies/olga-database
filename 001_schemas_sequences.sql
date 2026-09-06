@@ -14,6 +14,8 @@ IF SCHEMA_ID(N'social') IS NULL EXEC(N'CREATE SCHEMA [social] AUTHORIZATION dbo'
 GO
 IF SCHEMA_ID(N'chat') IS NULL EXEC(N'CREATE SCHEMA [chat] AUTHORIZATION dbo');
 GO
+IF SCHEMA_ID(N'storage') IS NULL EXEC(N'CREATE SCHEMA [storage] AUTHORIZATION dbo');
+GO
 IF SCHEMA_ID(N'notification') IS NULL EXEC(N'CREATE SCHEMA [notification] AUTHORIZATION dbo');
 GO
 IF SCHEMA_ID(N'nlp') IS NULL EXEC(N'CREATE SCHEMA [nlp] AUTHORIZATION dbo');
@@ -29,4 +31,8 @@ GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.sequences WHERE name = N'MessageSequence' AND schema_id = SCHEMA_ID(N'chat'))
     EXEC(N'CREATE SEQUENCE chat.MessageSequence AS bigint START WITH 1 INCREMENT BY 1 CACHE 100');
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.sequences WHERE name = N'SyncChangeSequence' AND schema_id = SCHEMA_ID(N'ops'))
+    EXEC(N'CREATE SEQUENCE ops.SyncChangeSequence AS bigint START WITH 1 INCREMENT BY 1 CACHE 100');
 GO

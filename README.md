@@ -1,12 +1,13 @@
 # OLGA Connect Azure SQL deployment package
 
-This package creates the Release 1 Azure SQL database objects defined by Database Architecture and Table-Level Design v2.2. It is intended for a new, empty Azure SQL database. Existing standalone NLP databases require a reviewed migration rather than running the baseline over them.
+This package creates the OLGA Connect Release 1 Azure SQL objects defined by Database Architecture and Table-Level Design v2.3 and the MVP Architecture Implementation Guide v1.0. Use the baseline for a new database and the versioned upgrade manifest for a v2.2 database.
 
 ## Package contents
 
-- `001_schemas_sequences.sql`: 12 schemas and the chat message sequence.
-- `010_tables.sql`: all 58 documented product tables.
+- `001_schemas_sequences.sql`: 13 schemas plus chat and mobile-sync sequences.
+- `010_tables.sql`: all 66 documented v2.3 product tables.
 - `020_constraints_indexes.sql`: foreign keys, checks, unique rules and critical access-path indexes.
+- `025_invariants.sql`: cross-row and polymorphic integrity guards for files, privacy completion and active retention policies.
 - `030_views.sql`: four controlled security/integration views.
 - `040_procedures.sql`: eight controlled workflow procedures.
 - `050_seed.sql`: roles, `ranking-v1`, and optional provisional QA notification policies.
@@ -15,6 +16,9 @@ This package creates the Release 1 Azure SQL database objects defined by Databas
 - `090_verify.sql`: post-deployment completeness and trust checks.
 - `deploy.sql`: SQLCMD-mode deployment manifest.
 - `deploy.ps1`: Entra-authenticated deployment wrapper.
+- `migrations/002_v2_2_to_v2_3_expand.sql` and `migrations/002_v2_2_to_v2_3_contract.sql`: reviewed expand/contract upgrade steps.
+- `upgrade_v2_2_to_v2_3.sql` and `upgrade.ps1`: SQLCMD and PowerShell upgrade entry points for the previous baseline.
+- `docs/architecture-decisions-v2.3.md`: implemented boundaries, intentional Azure SQL adaptations and product values that remain unapproved.
 - `OLGA_Connect_AzureSQL_Full_Setup.sql`: single standalone setup script for SSMS, Azure Data Studio, or another client that supports `GO` batches.
 
 ## Details needed before Azure deployment
@@ -90,10 +94,23 @@ To add provisional QA notification policies, pass `-SeedMvpPolicies 1`. Leave th
 
 After the workload managed identities exist, copy `070_bind_identities.template.sql`, replace the placeholders, review the role mapping and execute it as the Entra administrator.
 
+## Upgrade a v2.2 database
+
+Take a backup or export, restore it to a non-production environment and run the upgrade there first.
+
+```powershell
+.\upgrade.ps1 -ServerFqdn '<server>.database.windows.net' -DatabaseName '<database>'
+```
+
+The upgrade migrates `chat.Attachment` metadata and message associations into `storage.FileAsset` and `storage.FileAssetLink`, replaces attachment references in verification and privacy requests, and installs the new authorization, session, privacy-task, sync and retention objects.
+
+For a populated identity table, the first upgrade run adds nullable ciphertext, hash and masked-hint columns, then stops before removing the v2.2 uniqueness control or plaintext. The approved CIAM migration process must backfill encrypted normalized subjects and keyed deterministic hashes. Rerun the same upgrade after the backfill; it validates completeness, makes the protected columns mandatory and removes plaintext. This fail-closed two-pass gate prevents a convenience migration from becoming the production cryptographic design.
+
 ## Safety and migration notes
 
 - Take a backup/export and test restore before applying this package to any database containing data.
-- The baseline is additive and does not drop tables or columns.
+- The clean baseline is additive. The reviewed v2.2-to-v2.3 upgrade removes `chat.Attachment` only after every row has been copied and checked in domain-neutral storage.
 - Schema drift is not silently repaired. Review any pre-existing object before deployment.
-- `chat.Attachment.blob_path_hash` and `notification.PushToken.token_fingerprint` are implementation-supporting SHA-256 values. They enforce the documented uniqueness rules without exceeding Azure SQL index-key limits or indexing encrypted token ciphertext.
-- Verification is structural; run API integration, authorization, concurrency, retention and performance tests before QA sign-off.
+- `storage.FileAsset.blob_path_hash` and `notification.PushToken.token_fingerprint` are implementation-supporting SHA-256 values. They enforce uniqueness without exceeding Azure SQL index-key limits or indexing ciphertext. Services must verify the full value after a hash match and treat collisions as security events.
+- `iam.MemberIdentity` stores only encrypted subjects, keyed deterministic hashes and optional masked hints. Passwords, OTP values, bearer tokens and refresh tokens remain outside Azure SQL.
+- `090_verify.sql` validates the exact v2.3 table inventory, controlled views and procedures, invariant triggers, sequences, protected identity columns, trusted constraints, enabled indexes and authorization seeds. API integration, deny-path, concurrency, retention, recovery and performance evidence is still required for QA sign-off.

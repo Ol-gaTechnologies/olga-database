@@ -1,215 +1,453 @@
-SET ANSI_NULLS ON;
-SET QUOTED_IDENTIFIER ON;
-GO
+CREATE OR REPLACE FUNCTION nlp.get_requester_intent(
+    p_member_id varchar(64), p_intent_id varchar(64), p_context_id varchar(64)
+)
+RETURNS TABLE (
+    intent_id varchar(64), member_id varchar(64), context_id varchar(64), intent_type varchar(16),
+    normalized_text varchar(4000), category varchar(128), industry varchar(128), geography varchar(128),
+    updated_at timestamptz, model_version varchar(128), dimensions int, embedding_hash char(64), embedding vector(1536)
+)
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT i.intent_id, i.member_id, i.context_id, i.intent_type, i.normalized_text,
+           i.category, i.industry, i.geography, i.updated_at,
+           e.model_version, e.dimensions, e.normalized_hash, e.embedding
+    FROM nlp.nlp_intent i
+    JOIN nlp.nlp_embedding e ON e.intent_id = i.intent_id AND e.status = 'ACTIVE'
+    JOIN nlp.nlp_model_version mv ON mv.model_version = e.model_version AND mv.status = 'ACTIVE'
+    WHERE i.intent_id = p_intent_id AND i.member_id = p_member_id AND i.context_id = p_context_id
+      AND i.status = 'MATCH_READY' AND i.expires_at > CURRENT_TIMESTAMP;
+$$;
 
-CREATE OR ALTER PROCEDURE nlp.GetRequesterIntent
-    @MemberId varchar(64), @IntentId varchar(64), @ContextId varchar(64)
-AS
+CREATE OR REPLACE FUNCTION nlp.get_eligible_candidates(
+    p_requester_id varchar(64), p_context_id varchar(64), p_max_rows int DEFAULT 200
+)
+RETURNS TABLE (
+    intent_id varchar(64), member_id varchar(64), context_id varchar(64), intent_type varchar(16),
+    normalized_text varchar(4000), category varchar(128), industry varchar(128), geography varchar(128),
+    updated_at timestamptz, model_version varchar(128), dimensions int, embedding_hash char(64),
+    embedding vector(1536), cosine_distance double precision
+)
+LANGUAGE plpgsql
+STABLE
+AS $$
 BEGIN
-    SET NOCOUNT ON;
-    SELECT i.*, e.model_version, e.dimensions, e.normalized_hash AS embedding_hash, e.embedding
-    FROM nlp.NlpIntent i
-    JOIN nlp.NlpEmbedding e ON e.intent_id = i.intent_id AND e.status = 'ACTIVE'
-    WHERE i.intent_id = @IntentId AND i.member_id = @MemberId AND i.context_id = @ContextId
-      AND i.status = 'MATCH_READY' AND i.expires_at > SYSUTCDATETIME();
-END;
-GO
-
-CREATE OR ALTER PROCEDURE nlp.GetEligibleCandidates
-    @RequesterId varchar(64), @ContextId varchar(64), @MaxRows int = 200
-AS
-BEGIN
-    SET NOCOUNT ON;
-    IF @MaxRows NOT BETWEEN 1 AND 200 THROW 50001, 'MaxRows must be between 1 and 200.', 1;
-    WITH EligibleMembers AS (
-        SELECT TOP (@MaxRows) m.member_id
-        FROM nlp.vw_MemberContextEligibility m
-        WHERE m.context_id = @ContextId AND m.member_id <> @RequesterId
-          AND m.is_live = 1 AND m.is_visible = 1 AND m.has_consent = 1 AND m.is_suspended = 0 AND m.is_deleted = 0
+    IF p_max_rows NOT BETWEEN 50 AND 200 THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'max_rows must be between 50 and 200.';
+    END IF;
+    RETURN QUERY
+    WITH requester_embedding AS MATERIALIZED (
+        SELECT e.embedding
+        FROM nlp.nlp_intent i
+        JOIN nlp.nlp_embedding e ON e.intent_id = i.intent_id AND e.status = 'ACTIVE'
+        JOIN nlp.nlp_model_version mv ON mv.model_version = e.model_version AND mv.status = 'ACTIVE'
+        WHERE i.member_id = p_requester_id AND i.context_id = p_context_id
+          AND i.intent_type = 'WANT' AND i.status = 'MATCH_READY' AND i.expires_at > CURRENT_TIMESTAMP
+        ORDER BY i.updated_at DESC, i.intent_id
+        LIMIT 1
+    ), matching_policy AS MATERIALIZED (
+        SELECT p.proximity_mode, p.max_presence_age_minutes
+        FROM event.event_matching_policy p
+        WHERE p.event_id = p_context_id AND p.status = 'ACTIVE'
+          AND p.effective_from <= CURRENT_TIMESTAMP
+          AND (p.effective_to IS NULL OR p.effective_to > CURRENT_TIMESTAMP)
+        ORDER BY p.policy_version DESC
+        LIMIT 1
+    ), eligible_members AS MATERIALIZED (
+        SELECT m.member_id
+        FROM nlp.vw_member_context_eligibility m
+        WHERE m.context_id = p_context_id AND m.member_id <> p_requester_id
+          AND m.is_live AND m.is_visible AND m.has_consent AND NOT m.is_suspended AND NOT m.is_deleted
           AND NOT EXISTS (
-              SELECT 1 FROM nlp.vw_MemberRelationship r
-              WHERE r.context_id = 'GLOBAL' AND r.member_id = @RequesterId AND r.other_member_id = m.member_id
-                AND (r.is_blocked = 1 OR r.is_connected = 1)
+              SELECT 1 FROM nlp.vw_member_relationship r
+              WHERE r.context_id = 'GLOBAL' AND r.member_id = p_requester_id AND r.other_member_id = m.member_id
+                AND (r.is_blocked OR r.is_connected)
           )
           AND NOT EXISTS (
-              SELECT 1 FROM nlp.MatchSuppression s
-              WHERE s.starts_at <= SYSUTCDATETIME() AND (s.ends_at IS NULL OR s.ends_at > SYSUTCDATETIME())
-                AND (s.member_id = m.member_id OR s.context_id = @ContextId)
+              SELECT 1 FROM nlp.match_suppression s
+              WHERE s.starts_at <= CURRENT_TIMESTAMP AND (s.ends_at IS NULL OR s.ends_at > CURRENT_TIMESTAMP)
+                AND (s.member_id = m.member_id OR s.context_id = p_context_id)
           )
-        ORDER BY m.member_id
+          AND (
+              NOT EXISTS (SELECT 1 FROM matching_policy p WHERE p.proximity_mode = 'COARSE_CELL')
+              OR EXISTS (
+                  SELECT 1
+                  FROM matching_policy p
+                  JOIN event.live_mode_session requester_session
+                    ON requester_session.event_id = p_context_id AND requester_session.member_id = p_requester_id
+                   AND requester_session.status = 'ACTIVE' AND requester_session.active_until > CURRENT_TIMESTAMP
+                  JOIN event.event_presence requester_presence
+                    ON requester_presence.live_session_id = requester_session.live_session_id
+                   AND requester_presence.observed_at >= CURRENT_TIMESTAMP - make_interval(mins => p.max_presence_age_minutes)
+                   AND requester_presence.expires_at > CURRENT_TIMESTAMP
+                  JOIN event.live_mode_session candidate_session
+                    ON candidate_session.event_id = p_context_id AND candidate_session.member_id = m.member_id
+                   AND candidate_session.status = 'ACTIVE' AND candidate_session.active_until > CURRENT_TIMESTAMP
+                  JOIN event.event_presence candidate_presence
+                    ON candidate_presence.live_session_id = candidate_session.live_session_id
+                   AND candidate_presence.coarse_cell = requester_presence.coarse_cell
+                   AND candidate_presence.observed_at >= CURRENT_TIMESTAMP - make_interval(mins => p.max_presence_age_minutes)
+                   AND candidate_presence.expires_at > CURRENT_TIMESTAMP
+                  WHERE p.proximity_mode = 'COARSE_CELL'
+              )
+          )
+    ), eligible_candidates AS MATERIALIZED (
+        SELECT i.intent_id, i.member_id, i.context_id, i.intent_type, i.normalized_text,
+               i.category, i.industry, i.geography, i.updated_at,
+               e.model_version, e.dimensions, e.normalized_hash AS embedding_hash, e.embedding
+        FROM eligible_members m
+        JOIN nlp.nlp_intent i ON i.member_id = m.member_id AND i.context_id = p_context_id
+        JOIN nlp.nlp_embedding e ON e.intent_id = i.intent_id AND e.status = 'ACTIVE'
+        JOIN nlp.nlp_model_version mv ON mv.model_version = e.model_version AND mv.status = 'ACTIVE'
+        WHERE i.intent_type = 'OFFER' AND i.status = 'MATCH_READY' AND i.expires_at > CURRENT_TIMESTAMP
+        ORDER BY i.updated_at DESC, i.intent_id
+        LIMIT p_max_rows
     )
-    SELECT i.*, e.model_version, e.dimensions, e.normalized_hash AS embedding_hash, e.embedding
-    FROM EligibleMembers m
-    JOIN nlp.NlpIntent i ON i.member_id = m.member_id AND i.context_id = @ContextId
-    JOIN nlp.NlpEmbedding e ON e.intent_id = i.intent_id AND e.status = 'ACTIVE'
-    WHERE i.intent_type = 'OFFER' AND i.status = 'MATCH_READY' AND i.expires_at > SYSUTCDATETIME()
-    ORDER BY i.updated_at DESC;
+    -- MATERIALIZED eligibility bounds the exact vector scan before cosine ranking.
+    SELECT c.intent_id, c.member_id, c.context_id, c.intent_type, c.normalized_text,
+           c.category, c.industry, c.geography, c.updated_at,
+           c.model_version, c.dimensions, c.embedding_hash, c.embedding,
+           (c.embedding <=> r.embedding)::double precision
+    FROM eligible_candidates c
+    CROSS JOIN requester_embedding r
+    ORDER BY c.embedding <=> r.embedding, c.updated_at DESC, c.intent_id;
 END;
-GO
+$$;
 
-CREATE OR ALTER PROCEDURE nlp.SaveMatchResults
-    @RequestId varchar(64), @RequesterId varchar(64), @ResultsJson nvarchar(max)
-AS
+CREATE OR REPLACE FUNCTION nlp.save_match_results(
+    p_request_id varchar(64), p_requester_id varchar(64), p_results jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_request_id varchar(64);
 BEGIN
-    SET NOCOUNT ON; SET XACT_ABORT ON;
-    IF ISJSON(@ResultsJson) <> 1 THROW 50002, 'ResultsJson must be valid JSON.', 1;
-    BEGIN TRANSACTION;
-    IF NOT EXISTS (SELECT 1 FROM nlp.NlpMatchResult WITH (UPDLOCK, HOLDLOCK) WHERE request_id = @RequestId)
-    BEGIN
-        INSERT nlp.NlpMatchResult(request_id, requester_id, candidate_id, rank, semantic_score, reciprocal_score, final_score, label, reason_codes, reason_text, model_version, preprocessing_version, ranking_version, policy_status)
-        SELECT @RequestId, @RequesterId, candidate_id, rank, semantic_score, reciprocal_score, final_score, label, reason_codes, reason_text, model_version, preprocessing_version, ranking_version, COALESCE(policy_status, 'ELIGIBLE')
-        FROM OPENJSON(@ResultsJson) WITH (
-            candidate_id varchar(64), rank smallint, semantic_score decimal(8,7), reciprocal_score decimal(8,7), final_score decimal(8,7),
-            label varchar(32), reason_codes nvarchar(1000) AS JSON, reason_text nvarchar(2000), model_version varchar(128),
-            preprocessing_version varchar(128), ranking_version varchar(128), policy_status varchar(24)
-        );
-        UPDATE nlp.MatchRequest
-        SET status = 'COMPLETED', candidate_count = (SELECT COUNT(*) FROM nlp.NlpMatchResult WHERE request_id = @RequestId),
-            completed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
-        WHERE request_id = @RequestId AND requester_id = @RequesterId;
-    END;
-    COMMIT TRANSACTION;
+    IF jsonb_typeof(p_results) <> 'array' THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'results must be a JSON array.';
+    END IF;
+    SELECT request_id INTO v_request_id
+    FROM nlp.match_request
+    WHERE request_id = p_request_id AND requester_id = p_requester_id
+    FOR UPDATE;
+    IF v_request_id IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'Match request not found for requester.';
+    END IF;
+    INSERT INTO nlp.nlp_match_result(
+        request_id, requester_id, candidate_id, rank, semantic_score, reciprocal_score, final_score,
+        label, reason_codes, reason_text, model_version, preprocessing_version, ranking_version, policy_status
+    )
+    SELECT p_request_id, p_requester_id, x.candidate_id, x.rank, x.semantic_score, x.reciprocal_score,
+           x.final_score, x.label, x.reason_codes, x.reason_text, x.model_version,
+           x.preprocessing_version, x.ranking_version, COALESCE(x.policy_status, 'ELIGIBLE')
+    FROM jsonb_to_recordset(p_results) AS x(
+        candidate_id varchar(64), rank smallint, semantic_score numeric(8,7), reciprocal_score numeric(8,7),
+        final_score numeric(8,7), label varchar(32), reason_codes jsonb, reason_text varchar(2000),
+        model_version varchar(128), preprocessing_version varchar(128), ranking_version varchar(128), policy_status varchar(24)
+    )
+    ON CONFLICT (request_id, candidate_id) DO NOTHING;
+    UPDATE nlp.match_request
+    SET status = 'COMPLETED',
+        candidate_count = (SELECT count(*) FROM nlp.nlp_match_result WHERE request_id = p_request_id),
+        completed_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE request_id = p_request_id;
 END;
-GO
+$$;
 
-CREATE OR ALTER PROCEDURE nlp.SaveFeedback
-    @MatchResultId bigint, @RequesterId varchar(64), @Label varchar(64), @ReasonCode varchar(64) = NULL,
-    @Reason nvarchar(1000) = NULL, @SupersedesFeedbackId bigint = NULL
-AS
+CREATE OR REPLACE FUNCTION nlp.save_feedback(
+    p_match_result_id bigint, p_requester_id varchar(64), p_label varchar(64),
+    p_reason_code varchar(64) DEFAULT NULL, p_reason varchar(1000) DEFAULT NULL,
+    p_supersedes_feedback_id bigint DEFAULT NULL
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_request_id varchar(64);
+    v_candidate_id varchar(64);
+    v_feedback_id bigint;
 BEGIN
-    SET NOCOUNT ON; SET XACT_ABORT ON;
-    IF @Label NOT IN ('USEFUL','NOT_USEFUL','INAPPROPRIATE') THROW 50003, 'Unsupported feedback label.', 1;
-    DECLARE @RequestId varchar(64), @CandidateId varchar(64);
-    SELECT @RequestId = request_id, @CandidateId = candidate_id
-    FROM nlp.NlpMatchResult WHERE match_result_id = @MatchResultId AND requester_id = @RequesterId;
-    IF @RequestId IS NULL THROW 50004, 'Match result not found for requester.', 1;
-    IF @SupersedesFeedbackId IS NOT NULL AND NOT EXISTS (
-        SELECT 1 FROM nlp.NlpFeedback WHERE feedback_id = @SupersedesFeedbackId
-          AND requester_id = @RequesterId AND match_result_id = @MatchResultId
-    ) THROW 50005, 'Feedback correction does not reference the same requester and match result.', 1;
-    INSERT nlp.NlpFeedback(supersedes_feedback_id, match_result_id, request_id, requester_id, candidate_id, label, reason_code, reason)
-    VALUES(@SupersedesFeedbackId, @MatchResultId, @RequestId, @RequesterId, @CandidateId, @Label, @ReasonCode, @Reason);
+    IF p_label NOT IN ('USEFUL','NOT_USEFUL','INAPPROPRIATE') THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Unsupported feedback label.';
+    END IF;
+    SELECT request_id, candidate_id INTO v_request_id, v_candidate_id
+    FROM nlp.nlp_match_result
+    WHERE match_result_id = p_match_result_id AND requester_id = p_requester_id;
+    IF v_request_id IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'Match result not found for requester.';
+    END IF;
+    IF p_supersedes_feedback_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM nlp.nlp_feedback
+        WHERE feedback_id = p_supersedes_feedback_id
+          AND requester_id = p_requester_id AND match_result_id = p_match_result_id
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'Feedback correction does not reference the same requester and match result.';
+    END IF;
+    INSERT INTO nlp.nlp_feedback(
+        supersedes_feedback_id, match_result_id, request_id, requester_id, candidate_id, label, reason_code, reason
+    ) VALUES (
+        p_supersedes_feedback_id, p_match_result_id, v_request_id, p_requester_id, v_candidate_id, p_label, p_reason_code, p_reason
+    ) RETURNING feedback_id INTO v_feedback_id;
+    RETURN v_feedback_id;
 END;
-GO
+$$;
 
-CREATE OR ALTER PROCEDURE social.AcceptConnectionRequest
-    @ConnectionRequestId varchar(64), @RecipientMemberId varchar(64), @ConnectionId varchar(64), @ConversationId varchar(64)
-AS
+CREATE OR REPLACE FUNCTION social.accept_connection_request(
+    p_connection_request_id varchar(64), p_recipient_member_id varchar(64),
+    p_connection_id varchar(64), p_conversation_id varchar(64)
+)
+RETURNS TABLE (connection_id varchar(64), conversation_id varchar(64))
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_sender_id varchar(64);
+    v_existing_connection_id varchar(64);
+    v_existing_conversation_id varchar(64);
 BEGIN
-    SET NOCOUNT ON; SET XACT_ABORT ON;
-    DECLARE @SenderId varchar(64), @LowId varchar(64), @HighId varchar(64);
-    BEGIN TRANSACTION;
-    SELECT @SenderId = sender_member_id FROM social.ConnectionRequest WITH (UPDLOCK, HOLDLOCK)
-    WHERE connection_request_id = @ConnectionRequestId AND recipient_member_id = @RecipientMemberId
-      AND status = 'PENDING' AND expires_at > SYSUTCDATETIME();
-    IF @SenderId IS NULL THROW 50100, 'Pending connection request not found.', 1;
-    IF EXISTS (SELECT 1 FROM social.MemberBlock WHERE removed_at IS NULL AND ((blocker_member_id=@SenderId AND blocked_member_id=@RecipientMemberId) OR (blocker_member_id=@RecipientMemberId AND blocked_member_id=@SenderId)))
-        THROW 50101, 'Connection is not eligible.', 1;
-    SET @LowId = CASE WHEN @SenderId < @RecipientMemberId THEN @SenderId ELSE @RecipientMemberId END;
-    SET @HighId = CASE WHEN @SenderId < @RecipientMemberId THEN @RecipientMemberId ELSE @SenderId END;
-    UPDATE social.ConnectionRequest SET status='ACCEPTED', responded_at=SYSUTCDATETIME(), updated_at=SYSUTCDATETIME() WHERE connection_request_id=@ConnectionRequestId;
-    INSERT social.Connection(connection_id,member_low_id,member_high_id,accepted_request_id) VALUES(@ConnectionId,@LowId,@HighId,@ConnectionRequestId);
-    INSERT chat.Conversation(conversation_id,connection_id) VALUES(@ConversationId,@ConnectionId);
-    INSERT chat.ConversationParticipant(conversation_id,member_id) VALUES(@ConversationId,@SenderId),(@ConversationId,@RecipientMemberId);
-    INSERT ops.OutboxEvent(outbox_event_id,aggregate_type,aggregate_id,event_type,payload_json)
-    VALUES(CONVERT(varchar(64),NEWID()),'CONNECTION',@ConnectionId,'connection.accepted',JSON_OBJECT('connectionId':@ConnectionId,'conversationId':@ConversationId));
-    COMMIT TRANSACTION;
+    SELECT sender_member_id INTO v_sender_id
+    FROM social.connection_request
+    WHERE connection_request_id = p_connection_request_id
+      AND recipient_member_id = p_recipient_member_id
+      AND status = 'PENDING' AND expires_at > CURRENT_TIMESTAMP
+    FOR UPDATE;
+    IF v_sender_id IS NULL THEN
+        SELECT c.connection_id, cv.conversation_id
+        INTO v_existing_connection_id, v_existing_conversation_id
+        FROM social.connection c
+        JOIN chat.conversation cv ON cv.connection_id = c.connection_id
+        WHERE c.accepted_request_id = p_connection_request_id
+          AND p_recipient_member_id IN (c.member_low_id, c.member_high_id);
+        IF v_existing_connection_id = p_connection_id AND v_existing_conversation_id = p_conversation_id THEN
+            RETURN QUERY SELECT v_existing_connection_id, v_existing_conversation_id;
+            RETURN;
+        END IF;
+        RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'Pending connection request not found.';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM social.member_block
+        WHERE removed_at IS NULL
+          AND ((blocker_member_id = v_sender_id AND blocked_member_id = p_recipient_member_id)
+            OR (blocker_member_id = p_recipient_member_id AND blocked_member_id = v_sender_id))
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'Connection is not eligible.';
+    END IF;
+    UPDATE social.connection_request
+    SET status = 'ACCEPTED', responded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE connection_request_id = p_connection_request_id;
+    INSERT INTO social.connection(connection_id, member_low_id, member_high_id, accepted_request_id)
+    VALUES (p_connection_id, LEAST(v_sender_id, p_recipient_member_id), GREATEST(v_sender_id, p_recipient_member_id), p_connection_request_id);
+    INSERT INTO chat.conversation(conversation_id, connection_id) VALUES (p_conversation_id, p_connection_id);
+    INSERT INTO chat.conversation_participant(conversation_id, member_id)
+    VALUES (p_conversation_id, v_sender_id), (p_conversation_id, p_recipient_member_id);
+    INSERT INTO ops.outbox_event(outbox_event_id, aggregate_type, aggregate_id, event_type, payload_json)
+    VALUES (gen_random_uuid()::text, 'CONNECTION', p_connection_id, 'connection.accepted',
+            jsonb_build_object('connectionId', p_connection_id, 'conversationId', p_conversation_id));
+    RETURN QUERY SELECT p_connection_id, p_conversation_id;
 END;
-GO
+$$;
 
-CREATE OR ALTER PROCEDURE chat.SaveMessage
-    @MessageId varchar(64), @ConversationId varchar(64), @SenderMemberId varchar(64),
-    @MessageType varchar(20), @Body nvarchar(max) = NULL, @ClientSentAt datetimeoffset(7) = NULL
-AS
+CREATE OR REPLACE FUNCTION chat.save_message(
+    p_message_id varchar(64), p_conversation_id varchar(64), p_sender_member_id varchar(64),
+    p_message_type varchar(20), p_body text DEFAULT NULL, p_client_sent_at timestamptz DEFAULT NULL
+)
+RETURNS SETOF chat.message
+LANGUAGE plpgsql
+AS $$
 BEGIN
-    SET NOCOUNT ON; SET XACT_ABORT ON;
-    IF @MessageType NOT IN ('TEXT','FILE','SYSTEM') THROW 50200, 'Unsupported message type.', 1;
-    IF NOT EXISTS (SELECT 1 FROM chat.vw_AuthorizedConversation WHERE conversation_id=@ConversationId AND member_id=@SenderMemberId AND can_send=1)
-        THROW 50201, 'Member is not authorized to send to this conversation.', 1;
-    BEGIN TRANSACTION;
-    IF NOT EXISTS (SELECT 1 FROM chat.Message WITH (UPDLOCK,HOLDLOCK) WHERE message_id=@MessageId)
-    BEGIN
-        INSERT chat.Message(message_id,conversation_id,sender_member_id,message_type,body,client_sent_at)
-        VALUES(@MessageId,@ConversationId,@SenderMemberId,@MessageType,@Body,@ClientSentAt);
-        UPDATE chat.Conversation SET last_message_at=SYSUTCDATETIME(),updated_at=SYSUTCDATETIME() WHERE conversation_id=@ConversationId;
-        INSERT ops.OutboxEvent(outbox_event_id,aggregate_type,aggregate_id,event_type,payload_json)
-        VALUES(CONVERT(varchar(64),NEWID()),'MESSAGE',@MessageId,'chat.message.created',JSON_OBJECT('messageId':@MessageId,'conversationId':@ConversationId));
-    END;
-    COMMIT TRANSACTION;
-    SELECT * FROM chat.Message WHERE message_id=@MessageId;
+    IF p_message_type NOT IN ('TEXT','FILE','SYSTEM') THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Unsupported message type.';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM chat.vw_authorized_conversation
+        WHERE conversation_id = p_conversation_id AND member_id = p_sender_member_id AND can_send
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Member is not authorized to send to this conversation.';
+    END IF;
+    PERFORM 1 FROM chat.conversation WHERE conversation_id = p_conversation_id FOR UPDATE;
+    IF EXISTS (
+        SELECT 1 FROM chat.message
+        WHERE message_id = p_message_id
+          AND (conversation_id <> p_conversation_id OR sender_member_id <> p_sender_member_id)
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'message_id is already bound to another sender or conversation.';
+    END IF;
+    INSERT INTO chat.message(message_id, conversation_id, sender_member_id, message_type, body, client_sent_at)
+    VALUES (p_message_id, p_conversation_id, p_sender_member_id, p_message_type, p_body, p_client_sent_at)
+    ON CONFLICT (message_id) DO NOTHING;
+    IF FOUND THEN
+        UPDATE chat.conversation
+        SET last_message_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE conversation_id = p_conversation_id;
+        INSERT INTO ops.outbox_event(outbox_event_id, aggregate_type, aggregate_id, event_type, payload_json)
+        VALUES (gen_random_uuid()::text, 'MESSAGE', p_message_id, 'chat.message.created',
+                jsonb_build_object('messageId', p_message_id, 'conversationId', p_conversation_id));
+    END IF;
+    RETURN QUERY SELECT m.* FROM chat.message m WHERE m.message_id = p_message_id;
 END;
-GO
+$$;
 
-CREATE OR ALTER PROCEDURE event.PurgeExpiredPresence
-    @BatchSize int = 5000
-AS
+CREATE OR REPLACE FUNCTION event.purge_expired_presence(p_batch_size int DEFAULT 5000)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_deleted bigint;
 BEGIN
-    SET NOCOUNT ON; SET XACT_ABORT ON;
-    IF @BatchSize NOT BETWEEN 1 AND 20000 THROW 50300, 'BatchSize must be between 1 and 20000.', 1;
-    DELETE TOP (@BatchSize) FROM event.EventPresence WHERE expires_at <= SYSUTCDATETIME();
-    SELECT @@ROWCOUNT AS deleted_rows;
+    IF p_batch_size NOT BETWEEN 1 AND 20000 THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'batch_size must be between 1 and 20000.';
+    END IF;
+    WITH targets AS (
+        SELECT ctid FROM event.event_presence
+        WHERE expires_at <= CURRENT_TIMESTAMP
+        ORDER BY expires_at
+        LIMIT p_batch_size
+        FOR UPDATE SKIP LOCKED
+    )
+    DELETE FROM event.event_presence p USING targets t WHERE p.ctid = t.ctid;
+    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+    RETURN v_deleted;
 END;
-GO
+$$;
 
-CREATE OR ALTER PROCEDURE notification.TryEnqueue
-    @NotificationId varchar(64), @MemberId varchar(64), @PurposeCode varchar(64), @Channel varchar(16),
-    @ResourceType varchar(32), @ResourceId varchar(64), @TemplateCode varchar(64), @DedupeKey varchar(160),
-    @ContextId varchar(64) = NULL, @SourceConfidence decimal(6,5) = NULL
-AS
+CREATE OR REPLACE FUNCTION notification.try_enqueue(
+    p_notification_id varchar(64), p_member_id varchar(64), p_purpose_code varchar(64), p_channel varchar(16),
+    p_resource_type varchar(32), p_resource_id varchar(64), p_template_code varchar(64), p_dedupe_key varchar(160),
+    p_context_id varchar(64) DEFAULT NULL, p_source_confidence numeric(6,5) DEFAULT NULL
+)
+RETURNS TABLE (
+    notification_id varchar(64), status varchar(20), scheduled_at timestamptz,
+    expires_at timestamptz, suppression_reason varchar(64)
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_now timestamptz := CURRENT_TIMESTAMP;
+    v_community_id varchar(64);
+    v_policy_id bigint;
+    v_opt_out boolean;
+    v_quiet_behavior varchar(16);
+    v_dedupe_seconds int;
+    v_max_hour smallint;
+    v_max_day smallint;
+    v_ttl int;
+    v_event_policy_id bigint;
+    v_alert_threshold numeric(6,5);
+    v_event_max_hour smallint;
+    v_event_max_total smallint;
+    v_min_interval smallint;
+    v_suppression varchar(64);
+    v_scheduled_at timestamptz := v_now;
+    v_bucket_start timestamptz;
+    v_push_enabled boolean := true;
+    v_email_enabled boolean := true;
+    v_quiet_start time;
+    v_quiet_end time;
+    v_timezone_id varchar(64);
+    v_local_now timestamp;
+    v_local_time time;
+    v_target_date date;
 BEGIN
-    SET NOCOUNT ON; SET XACT_ABORT ON;
-    DECLARE @Now datetimeoffset(7)=SYSUTCDATETIME(), @CommunityId varchar(64), @PolicyId bigint,
-            @OptOut bit, @QuietBehavior varchar(16), @DedupeSeconds int, @MaxHour smallint, @MaxDay smallint,
-            @Ttl int, @EventPolicyId bigint=NULL, @AlertThreshold decimal(6,5)=NULL,
-            @EventMaxHour smallint=NULL, @EventMaxTotal smallint=NULL, @MinInterval smallint=NULL,
-            @Suppression varchar(64)=NULL, @ScheduledAt datetimeoffset(7), @BucketStart datetimeoffset(7),
-            @PushEnabled bit=1, @EmailEnabled bit=1, @QuietStart time=NULL, @QuietEnd time=NULL, @TimezoneId varchar(64)=NULL;
-    SELECT @CommunityId=community_id FROM iam.Member WHERE member_id=@MemberId AND status='ACTIVE';
-    IF @CommunityId IS NULL THROW 50400, 'Active member not found.', 1;
-    SELECT TOP(1) @PolicyId=notification_policy_id,@OptOut=member_opt_out_allowed,@QuietBehavior=quiet_hours_behavior,
-           @DedupeSeconds=dedupe_window_seconds,@MaxHour=max_per_hour,@MaxDay=max_per_day,@Ttl=ttl_minutes
-    FROM notification.NotificationPolicy
-    WHERE status='ACTIVE' AND purpose_code=@PurposeCode AND channel=@Channel
-      AND (community_id=@CommunityId OR community_id IS NULL) AND effective_from<=@Now AND (effective_to IS NULL OR effective_to>@Now)
-    ORDER BY CASE WHEN community_id=@CommunityId THEN 0 ELSE 1 END, policy_version DESC;
-    IF @PolicyId IS NULL THROW 50401, 'No active notification policy.', 1;
-    IF @ContextId IS NOT NULL AND @ContextId<>'GENERAL'
-        SELECT TOP(1) @EventPolicyId=event_matching_policy_id,@AlertThreshold=alert_confidence_threshold,
-               @EventMaxHour=max_match_alerts_per_hour,@EventMaxTotal=max_match_alerts_per_event,@MinInterval=minimum_alert_interval_minutes
-        FROM event.EventMatchingPolicy
-        WHERE event_id=@ContextId AND status='ACTIVE' AND effective_from<=@Now AND (effective_to IS NULL OR effective_to>@Now)
-        ORDER BY policy_version DESC;
-    SELECT @PushEnabled=push_enabled,@EmailEnabled=email_enabled,@QuietStart=quiet_start_local,@QuietEnd=quiet_end_local,@TimezoneId=timezone_id
-    FROM notification.NotificationPreference WHERE member_id=@MemberId AND purpose_code=@PurposeCode;
-    SET @ScheduledAt=@Now;
-    SET @BucketStart=DATEADD(SECOND, CONVERT(int,DATEDIFF_BIG(SECOND,'20000101',@Now)/@DedupeSeconds)*@DedupeSeconds, CONVERT(datetimeoffset(7),'20000101'));
-    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
-    BEGIN TRANSACTION;
-    IF EXISTS (SELECT 1 FROM notification.Notification WITH (UPDLOCK,HOLDLOCK) WHERE member_id=@MemberId AND channel=@Channel AND dedupe_key=@DedupeKey AND dedupe_bucket_start=@BucketStart)
-    BEGIN SELECT TOP(1) notification_id,status,suppression_reason FROM notification.Notification WHERE member_id=@MemberId AND channel=@Channel AND dedupe_key=@DedupeKey AND dedupe_bucket_start=@BucketStart; COMMIT; RETURN; END;
-    IF @OptOut=1 AND ((@Channel='PUSH' AND @PushEnabled=0) OR (@Channel='EMAIL' AND @EmailEnabled=0)) SET @Suppression='OPT_OUT';
-    IF @EventPolicyId IS NOT NULL AND @SourceConfidence IS NOT NULL AND @SourceConfidence<@AlertThreshold SET @Suppression='BELOW_THRESHOLD';
-    IF @Suppression IS NULL AND (SELECT COUNT(*) FROM notification.Notification WITH (UPDLOCK,HOLDLOCK) WHERE member_id=@MemberId AND notification_policy_id=@PolicyId AND created_at>DATEADD(HOUR,-1,@Now) AND status IN ('PENDING','SENT','DELIVERED'))>=@MaxHour SET @Suppression='RATE_LIMIT';
-    IF @Suppression IS NULL AND (SELECT COUNT(*) FROM notification.Notification WITH (UPDLOCK,HOLDLOCK) WHERE member_id=@MemberId AND notification_policy_id=@PolicyId AND created_at>DATEADD(DAY,-1,@Now) AND status IN ('PENDING','SENT','DELIVERED'))>=@MaxDay SET @Suppression='RATE_LIMIT';
-    IF @Suppression IS NULL AND @EventPolicyId IS NOT NULL AND (SELECT COUNT(*) FROM notification.Notification WITH (UPDLOCK,HOLDLOCK) WHERE member_id=@MemberId AND event_matching_policy_id=@EventPolicyId AND created_at>DATEADD(HOUR,-1,@Now) AND status IN ('PENDING','SENT','DELIVERED'))>=@EventMaxHour SET @Suppression='RATE_LIMIT';
-    IF @Suppression IS NULL AND @EventPolicyId IS NOT NULL AND (SELECT COUNT(*) FROM notification.Notification WITH (UPDLOCK,HOLDLOCK) WHERE member_id=@MemberId AND event_matching_policy_id=@EventPolicyId AND status IN ('PENDING','SENT','DELIVERED'))>=@EventMaxTotal SET @Suppression='RATE_LIMIT';
-    IF @Suppression IS NULL AND @EventPolicyId IS NOT NULL AND EXISTS (SELECT 1 FROM notification.Notification WITH (UPDLOCK,HOLDLOCK) WHERE member_id=@MemberId AND event_matching_policy_id=@EventPolicyId AND created_at>DATEADD(MINUTE,-@MinInterval,@Now) AND status IN ('PENDING','SENT','DELIVERED')) SET @Suppression='RATE_LIMIT';
-    IF @Suppression IS NULL AND @QuietStart IS NOT NULL AND @QuietEnd IS NOT NULL AND @TimezoneId IS NOT NULL
-    BEGIN
-        DECLARE @LocalNow datetimeoffset(7)=@Now AT TIME ZONE @TimezoneId, @LocalTime time=CONVERT(time,@Now AT TIME ZONE @TimezoneId);
-        DECLARE @InQuiet bit=CASE WHEN @QuietStart<@QuietEnd AND @LocalTime>=@QuietStart AND @LocalTime<@QuietEnd THEN 1 WHEN @QuietStart>@QuietEnd AND (@LocalTime>=@QuietStart OR @LocalTime<@QuietEnd) THEN 1 ELSE 0 END;
-        IF @InQuiet=1 AND @QuietBehavior='SUPPRESS' SET @Suppression='QUIET_HOURS';
-        IF @InQuiet=1 AND @QuietBehavior='DEFER'
-        BEGIN
-            DECLARE @TargetDate date=CASE WHEN @LocalTime<@QuietEnd THEN CONVERT(date,@LocalNow) ELSE DATEADD(DAY,1,CONVERT(date,@LocalNow)) END;
-            DECLARE @LocalEnd datetime2=DATEADD(SECOND,DATEDIFF(SECOND,CONVERT(time,'00:00'),@QuietEnd),CONVERT(datetime2,@TargetDate));
-            SET @ScheduledAt=SWITCHOFFSET(@LocalEnd AT TIME ZONE @TimezoneId,'+00:00');
-        END;
-    END;
-    INSERT notification.Notification(notification_id,member_id,notification_policy_id,event_matching_policy_id,purpose_code,channel,resource_type,resource_id,template_code,dedupe_key,dedupe_bucket_start,source_confidence,context_id,status,scheduled_at,expires_at,suppression_reason)
-    VALUES(@NotificationId,@MemberId,@PolicyId,@EventPolicyId,@PurposeCode,@Channel,@ResourceType,@ResourceId,@TemplateCode,@DedupeKey,@BucketStart,@SourceConfidence,@ContextId,CASE WHEN @Suppression IS NULL THEN 'PENDING' ELSE 'SUPPRESSED' END,@ScheduledAt,DATEADD(MINUTE,@Ttl,@Now),@Suppression);
-    IF @Suppression IS NULL INSERT ops.OutboxEvent(outbox_event_id,aggregate_type,aggregate_id,event_type,payload_json) VALUES(CONVERT(varchar(64),NEWID()),'NOTIFICATION',@NotificationId,'notification.queued',JSON_OBJECT('notificationId':@NotificationId));
-    COMMIT TRANSACTION;
-    SELECT notification_id,status,scheduled_at,expires_at,suppression_reason FROM notification.Notification WHERE notification_id=@NotificationId;
+    SELECT m.community_id INTO v_community_id
+    FROM iam.member m WHERE m.member_id = p_member_id AND m.status = 'ACTIVE';
+    IF v_community_id IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'Active member not found.';
+    END IF;
+    SELECT p.notification_policy_id, p.member_opt_out_allowed, p.quiet_hours_behavior,
+           p.dedupe_window_seconds, p.max_per_hour, p.max_per_day, p.ttl_minutes
+    INTO v_policy_id, v_opt_out, v_quiet_behavior, v_dedupe_seconds, v_max_hour, v_max_day, v_ttl
+    FROM notification.notification_policy p
+    WHERE p.status = 'ACTIVE' AND p.purpose_code = p_purpose_code AND p.channel = p_channel
+      AND (p.community_id = v_community_id OR p.community_id IS NULL)
+      AND p.effective_from <= v_now AND (p.effective_to IS NULL OR p.effective_to > v_now)
+    ORDER BY CASE WHEN p.community_id = v_community_id THEN 0 ELSE 1 END, p.policy_version DESC
+    LIMIT 1;
+    IF v_policy_id IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'No active notification policy.';
+    END IF;
+    IF p_context_id IS NOT NULL AND p_context_id <> 'GENERAL' THEN
+        SELECT p.event_matching_policy_id, p.alert_confidence_threshold,
+               p.max_match_alerts_per_hour, p.max_match_alerts_per_event, p.minimum_alert_interval_minutes
+        INTO v_event_policy_id, v_alert_threshold, v_event_max_hour, v_event_max_total, v_min_interval
+        FROM event.event_matching_policy p
+        WHERE p.event_id = p_context_id AND p.status = 'ACTIVE'
+          AND p.effective_from <= v_now AND (p.effective_to IS NULL OR p.effective_to > v_now)
+        ORDER BY p.policy_version DESC LIMIT 1;
+        IF p_purpose_code = 'MATCH' AND (v_event_policy_id IS NULL OR p_source_confidence IS NULL) THEN
+            v_suppression := 'POLICY';
+        END IF;
+    END IF;
+    SELECT p.push_enabled, p.email_enabled, p.quiet_start_local, p.quiet_end_local, p.timezone_id
+    INTO v_push_enabled, v_email_enabled, v_quiet_start, v_quiet_end, v_timezone_id
+    FROM notification.notification_preference p
+    WHERE p.member_id = p_member_id AND p.purpose_code = p_purpose_code;
+    IF NOT FOUND THEN
+        v_push_enabled := true;
+        v_email_enabled := true;
+        v_quiet_start := NULL;
+        v_quiet_end := NULL;
+        v_timezone_id := NULL;
+    END IF;
+
+    v_bucket_start := to_timestamp(floor(extract(epoch FROM v_now) / v_dedupe_seconds) * v_dedupe_seconds);
+    -- Serializes policy counters per member without locking unrelated recipients.
+    PERFORM pg_advisory_xact_lock(hashtextextended(p_member_id || ':' || v_policy_id::text, 0));
+
+    RETURN QUERY
+    SELECT n.notification_id, n.status, n.scheduled_at, n.expires_at, n.suppression_reason
+    FROM notification.notification n
+    WHERE n.member_id = p_member_id AND n.channel = p_channel
+      AND n.dedupe_key = p_dedupe_key AND n.dedupe_bucket_start = v_bucket_start;
+    IF FOUND THEN RETURN; END IF;
+
+    IF v_suppression IS NULL AND v_opt_out
+       AND ((p_channel = 'PUSH' AND NOT v_push_enabled) OR (p_channel = 'EMAIL' AND NOT v_email_enabled)) THEN
+        v_suppression := 'OPT_OUT';
+    ELSIF v_suppression IS NULL AND v_event_policy_id IS NOT NULL
+       AND p_source_confidence IS NOT NULL AND p_source_confidence < v_alert_threshold THEN
+        v_suppression := 'BELOW_THRESHOLD';
+    ELSIF v_suppression IS NULL AND ((SELECT count(*) FROM notification.notification n WHERE n.member_id = p_member_id AND n.notification_policy_id = v_policy_id AND n.created_at > v_now - interval '1 hour' AND n.status IN ('PENDING','SENT','DELIVERED')) >= v_max_hour
+       OR (SELECT count(*) FROM notification.notification n WHERE n.member_id = p_member_id AND n.notification_policy_id = v_policy_id AND n.created_at > v_now - interval '1 day' AND n.status IN ('PENDING','SENT','DELIVERED')) >= v_max_day) THEN
+        v_suppression := 'RATE_LIMIT';
+    ELSIF v_suppression IS NULL AND v_event_policy_id IS NOT NULL AND (
+        (SELECT count(*) FROM notification.notification n WHERE n.member_id = p_member_id AND n.event_matching_policy_id = v_event_policy_id AND n.created_at > v_now - interval '1 hour' AND n.status IN ('PENDING','SENT','DELIVERED')) >= v_event_max_hour
+        OR (SELECT count(*) FROM notification.notification n WHERE n.member_id = p_member_id AND n.event_matching_policy_id = v_event_policy_id AND n.status IN ('PENDING','SENT','DELIVERED')) >= v_event_max_total
+        OR EXISTS (SELECT 1 FROM notification.notification n WHERE n.member_id = p_member_id AND n.event_matching_policy_id = v_event_policy_id AND n.created_at > v_now - make_interval(mins => v_min_interval) AND n.status IN ('PENDING','SENT','DELIVERED'))
+    ) THEN
+        v_suppression := 'RATE_LIMIT';
+    END IF;
+
+    IF v_suppression IS NULL AND v_quiet_start IS NOT NULL AND v_quiet_end IS NOT NULL AND v_timezone_id IS NOT NULL THEN
+        v_local_now := v_now AT TIME ZONE v_timezone_id;
+        v_local_time := v_local_now::time;
+        IF (v_quiet_start < v_quiet_end AND v_local_time >= v_quiet_start AND v_local_time < v_quiet_end)
+           OR (v_quiet_start > v_quiet_end AND (v_local_time >= v_quiet_start OR v_local_time < v_quiet_end)) THEN
+            IF v_quiet_behavior = 'SUPPRESS' THEN
+                v_suppression := 'QUIET_HOURS';
+            ELSIF v_quiet_behavior = 'DEFER' THEN
+                v_target_date := CASE WHEN v_local_time < v_quiet_end THEN v_local_now::date ELSE v_local_now::date + 1 END;
+                v_scheduled_at := (v_target_date + v_quiet_end) AT TIME ZONE v_timezone_id;
+            END IF;
+        END IF;
+    END IF;
+
+    INSERT INTO notification.notification(
+        notification_id, member_id, notification_policy_id, event_matching_policy_id, purpose_code, channel,
+        resource_type, resource_id, template_code, dedupe_key, dedupe_bucket_start, source_confidence,
+        context_id, status, scheduled_at, expires_at, suppression_reason
+    ) VALUES (
+        p_notification_id, p_member_id, v_policy_id, v_event_policy_id, p_purpose_code, p_channel,
+        p_resource_type, p_resource_id, p_template_code, p_dedupe_key, v_bucket_start, p_source_confidence,
+        p_context_id, CASE WHEN v_suppression IS NULL THEN 'PENDING' ELSE 'SUPPRESSED' END,
+        v_scheduled_at, v_now + make_interval(mins => v_ttl), v_suppression
+    );
+    IF v_suppression IS NULL THEN
+        INSERT INTO ops.outbox_event(outbox_event_id, aggregate_type, aggregate_id, event_type, payload_json)
+        VALUES (gen_random_uuid()::text, 'NOTIFICATION', p_notification_id, 'notification.queued',
+                jsonb_build_object('notificationId', p_notification_id));
+    END IF;
+    RETURN QUERY
+    SELECT n.notification_id, n.status, n.scheduled_at, n.expires_at, n.suppression_reason
+    FROM notification.notification n WHERE n.notification_id = p_notification_id;
 END;
-GO
+$$;

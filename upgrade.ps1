@@ -1,15 +1,1 @@
-[CmdletBinding()]
-param(
-    [Parameter(Mandatory=$true)][string]$ServerFqdn,
-    [Parameter(Mandatory=$true)][string]$DatabaseName,
-    [ValidateSet('0','1')][string]$SeedMvpPolicies = '0'
-)
-$ErrorActionPreference = 'Stop'
-$sqlcmd = Get-Command sqlcmd -ErrorAction Stop
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
-Push-Location $root
-try {
-    & $sqlcmd.Source -S "tcp:$ServerFqdn,1433" -d $DatabaseName -G -N -l 60 -b -v "SeedMvpPolicies=$SeedMvpPolicies" -i ".\upgrade_v2_2_to_v2_3.sql"
-    if ($LASTEXITCODE -ne 0) { throw "sqlcmd upgrade failed with exit code $LASTEXITCODE" }
-}
-finally { Pop-Location }
+throw 'Cross-engine SQL Server-to-PostgreSQL upgrades require a separately reviewed data-migration plan.'

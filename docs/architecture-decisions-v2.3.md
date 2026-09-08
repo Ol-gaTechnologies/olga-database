@@ -7,7 +7,7 @@ This database package implements the persistence, integrity, migration and least
 ## Implemented decisions
 
 - Replaced `chat.Attachment` with `storage.FileAsset` and `storage.FileAssetLink`. The new model supports chat files, verification evidence, privacy exports and NLP evaluation reports without assigning storage ownership to chat.
-- Added `iam.Permission`, `iam.RolePermission` and `iam.AuthSession`. Azure SQL stores application authorization and session revocation state, not credentials or bearer and refresh tokens.
+- Added `iam.Permission`, `iam.RolePermission` and `iam.AuthSession`. PostgreSQL stores application authorization and session revocation state, not credentials or bearer and refresh tokens.
 - Replaced plaintext identity subjects with encrypted ciphertext, a keyed deterministic lookup hash and an optional masked support hint.
 - Added `consent.PrivacyRequestTask` so privacy completion is based on evidenced domain tasks rather than a single mutable status.
 - Added `ops.SyncChange` with a durable sequence, member scope, tombstones and expiry for authorization-filtered mobile delta synchronization.
@@ -15,13 +15,13 @@ This database package implements the persistence, integrity, migration and least
 - Added database guards for polymorphic file-link integrity, privacy-request completion and active retention-policy immutability.
 - Added an exact object-inventory verification, trusted-constraint checks, disabled-object checks and schema-version stamping.
 
-## Security and Azure SQL implementation notes
+## Security and PostgreSQL implementation notes
 
-- `storage.FileAsset.blob_path` is `nvarchar(1024)` and cannot be a safe Azure SQL index key because its maximum encoded size exceeds the 1,700-byte nonclustered-index key limit. `blob_path_hash` is the enforceable unique key. The file service must compare the full path after a hash match and treat a collision as a security event.
+- `storage.file_asset.blob_path` can exceed PostgreSQL B-tree entry limits. `blob_path_hash` is the enforceable unique key; the file service compares the full path after a hash match and treats a collision as a security event.
 - `notification.PushToken.token_ciphertext` is not indexed. `token_fingerprint` is retained as a non-secret lookup and uniqueness value so encrypted provider tokens remain opaque at rest.
 - The v2.2 upgrade refuses to transform populated plaintext `iam.MemberIdentity.provider_subject` values. An approved CIAM migration must generate ciphertext and keyed hashes before the contract migration removes plaintext.
 - `storage.FileAssetLink` is polymorphic by design. A trigger verifies that each supported resource exists in its authoritative domain table; the owning service must still perform authorization before creating a link.
-- Database roles grant service-owned schema access. Cross-schema grants are explicit. Application and worker identities are separate from migration and Microsoft Entra administration identities.
+- NOLOGIN database roles grant service-owned schema access. Cross-schema grants are explicit. Application and worker identities remain separate from migration and Microsoft Entra administration identities.
 
 ## Product values intentionally not activated
 
@@ -34,14 +34,14 @@ The following decisions remain configuration or product approvals and are not si
 - Notification channels, daily and hourly caps, retry schedules, time-to-live values and safety or account bypass rules.
 - Profile-field visibility before and after connection acceptance.
 - Production CIAM provider and required email or mobile verification policy.
-- Azure SQL native vector support in the selected subscription and region.
+- HNSW activation only after representative PostgreSQL latency and recall evidence.
 
 `SeedMvpPolicies` remains disabled by default. Retention policies have no default production seed. Approved values should be introduced in a reviewed migration so the deployed configuration is reproducible and auditable.
 
 ## Deployment paths
 
 - New database: run `deploy.ps1` or `deploy.sql`.
-- Existing v2.2 database: restore a backup to a non-production environment and run `upgrade.ps1` or `upgrade_v2_2_to_v2_3.sql` first.
-- Standalone SSMS or Azure Data Studio deployment: use `OLGA_Connect_AzureSQL_Full_Setup.sql` for a new empty database.
+- Existing v2.2 SQL Server database: use a separately reviewed cross-engine data migration; legacy upgrade scripts are not PostgreSQL deployment inputs.
+- Standalone deployment: use `OLGA_Connect_PostgreSQL_Full_Setup.sql` for a new empty database.
 
-The upgrade path migrates legacy attachment rows before dropping `chat.Attachment`, verifies the copy, rebuilds constraints and indexes, installs v2.3 invariants and runs the same verification used by a clean deployment.
+The cross-engine migration must preserve legacy attachments, validate row counts and hashes, and pass the same PostgreSQL verification used by a clean deployment before cutover.

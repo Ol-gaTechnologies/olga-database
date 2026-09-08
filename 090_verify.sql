@@ -1,60 +1,126 @@
-SET NOCOUNT ON;
-DECLARE @ExpectedTables int=66,@ExpectedViews int=4,@ExpectedProcedures int=8,@ExpectedTriggers int=4,@ExpectedSequences int=2;
-DECLARE @ProductSchemas TABLE(schema_name sysname PRIMARY KEY);
-INSERT @ProductSchemas VALUES ('core'),('iam'),('consent'),('event'),('social'),('chat'),('storage'),('notification'),('nlp'),('moderation'),('ops'),('analytics');
+DO $$
+DECLARE
+    expected_tables text[] := ARRAY[
+        'core.community','core.organization','core.organization_member','core.member_profile','core.sector','core.member_sector','core.member_geography','core.profile_field_visibility','core.member_verification',
+        'iam.member','iam.member_identity','iam.role','iam.permission','iam.role_permission','iam.member_role','iam.member_device','iam.auth_session',
+        'consent.consent_policy','consent.member_consent','consent.privacy_request','consent.privacy_request_task',
+        'event.venue','event.event','event.event_matching_policy','event.event_registration','event.live_mode_session','event.event_presence',
+        'social.connection_request','social.connection','social.member_block','social.member_report',
+        'chat.conversation','chat.conversation_participant','chat.message','chat.message_receipt',
+        'storage.file_asset','storage.file_asset_link',
+        'notification.notification_policy','notification.notification_preference','notification.push_token','notification.notification','notification.notification_delivery_attempt',
+        'nlp.nlp_intent','nlp.nlp_embedding','nlp.nlp_model_version','nlp.nlp_ranking_config','nlp.nlp_processing_job','nlp.match_request','nlp.nlp_match_result','nlp.nlp_feedback','nlp.match_suppression','nlp.evaluation_dataset','nlp.evaluation_pair','nlp.evaluation_run',
+        'moderation.moderation_case','moderation.moderation_action','moderation.content_rule','moderation.content_scan',
+        'ops.outbox_event','ops.idempotency_record','ops.background_job','ops.sync_change','ops.retention_policy','ops.retention_execution','ops.audit_event',
+        'analytics.product_event'
+    ];
+    expected_views text[] := ARRAY[
+        'nlp.vw_member_context_eligibility','nlp.vw_member_relationship','chat.vw_authorized_conversation','admin.vw_member_review'
+    ];
+    expected_functions text[] := ARRAY[
+        'nlp.get_requester_intent','nlp.get_eligible_candidates','nlp.save_match_results','nlp.save_feedback',
+        'social.accept_connection_request','chat.save_message','event.purge_expired_presence','notification.try_enqueue'
+    ];
+    expected_triggers text[] := ARRAY[
+        'storage.file_asset_link.enforce_file_asset_link_resource',
+        'consent.privacy_request.enforce_privacy_request_completion',
+        'consent.privacy_request_task.protect_completed_privacy_request_tasks',
+        'ops.retention_policy.protect_active_retention_policy'
+    ];
+    item text;
+    actual_count int;
+BEGIN
+    SELECT count(*) INTO actual_count
+    FROM information_schema.tables
+    WHERE table_type = 'BASE TABLE'
+      AND table_schema IN ('core','iam','consent','event','social','chat','storage','notification','nlp','moderation','ops','analytics');
+    IF actual_count <> cardinality(expected_tables) THEN
+        RAISE EXCEPTION 'Unexpected OLGA product-table count: expected %, found %', cardinality(expected_tables), actual_count;
+    END IF;
+    FOREACH item IN ARRAY expected_tables LOOP
+        IF to_regclass(item) IS NULL THEN RAISE EXCEPTION 'Required table is missing: %', item; END IF;
+    END LOOP;
+    FOREACH item IN ARRAY expected_views LOOP
+        IF to_regclass(item) IS NULL THEN RAISE EXCEPTION 'Required view is missing: %', item; END IF;
+    END LOOP;
+    FOREACH item IN ARRAY expected_functions LOOP
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = split_part(item,'.',1) AND p.proname = split_part(item,'.',2)
+        ) THEN RAISE EXCEPTION 'Required function is missing: %', item; END IF;
+    END LOOP;
+    FOREACH item IN ARRAY expected_triggers LOOP
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_trigger t
+            JOIN pg_class c ON c.oid = t.tgrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE NOT t.tgisinternal AND n.nspname = split_part(item,'.',1)
+              AND c.relname = split_part(item,'.',2) AND t.tgname = split_part(item,'.',3)
+        ) THEN RAISE EXCEPTION 'Required trigger is missing: %', item; END IF;
+    END LOOP;
+    IF to_regclass('chat.message_sequence') IS NULL OR to_regclass('ops.sync_change_sequence') IS NULL THEN
+        RAISE EXCEPTION 'One or more required sequences are missing.';
+    END IF;
+    IF to_regclass('chat.attachment') IS NOT NULL THEN RAISE EXCEPTION 'Legacy chat.attachment must not remain.'; END IF;
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'iam' AND table_name = 'member_identity' AND column_name = 'provider_subject'
+    ) THEN RAISE EXCEPTION 'Plaintext identity subject column remains.'; END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'iam' AND table_name = 'member_identity' AND column_name = 'provider_subject_hash'
+    ) OR NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'iam' AND table_name = 'member_identity' AND column_name = 'provider_subject_ciphertext' AND data_type = 'bytea'
+    ) THEN RAISE EXCEPTION 'Protected identity subject columns are missing or invalid.'; END IF;
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_attribute a
+        JOIN pg_class t ON t.oid = a.attrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE n.nspname = 'nlp' AND t.relname = 'nlp_embedding' AND a.attname = 'embedding'
+          AND format_type(a.atttypid, a.atttypmod) = 'vector(1536)'
+    ) THEN RAISE EXCEPTION 'nlp_embedding.embedding must use pgvector.'; END IF;
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE column_name = 'row_version'
+          AND table_schema IN ('core','iam','consent','event','social','chat','storage','notification','nlp','moderation','ops')
+          AND (data_type <> 'bigint' OR column_default IS NULL OR column_default !~ '^1(?:::bigint)?$')
+    ) THEN RAISE EXCEPTION 'Every row_version must be bigint with default 1.'; END IF;
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns c
+        WHERE c.column_name = 'row_version'
+          AND c.table_schema IN ('core','iam','consent','event','social','chat','storage','notification','nlp','moderation','ops')
+          AND NOT EXISTS (
+              SELECT 1 FROM pg_trigger t
+              WHERE t.tgrelid = format('%I.%I', c.table_schema, c.table_name)::regclass
+                AND t.tgname = 'set_row_version' AND t.tgfoid = 'ops.set_row_version()'::regprocedure
+                AND t.tgenabled <> 'D'
+          )
+    ) THEN RAISE EXCEPTION 'One or more row_version triggers are missing or disabled.'; END IF;
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint c
+        JOIN pg_namespace n ON n.oid = c.connamespace
+        WHERE n.nspname IN ('core','iam','consent','event','social','chat','storage','notification','nlp','moderation','ops','analytics')
+          AND NOT c.convalidated
+    ) THEN RAISE EXCEPTION 'One or more constraints are not validated.'; END IF;
+    IF EXISTS (
+        SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname IN ('core','iam','consent','event','social','chat','storage','notification','nlp','moderation','ops','analytics')
+          AND NOT i.indisvalid
+    ) THEN RAISE EXCEPTION 'One or more indexes are invalid.'; END IF;
+    IF EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname IN ('core','iam','consent','event','social','chat','storage','notification','nlp','moderation','ops','analytics')
+          AND indexdef ~* 'USING[[:space:]]+(hnsw|ivfflat)'
+    ) THEN RAISE EXCEPTION 'Approximate vector indexes are not approved.'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM iam.permission WHERE status = 'ACTIVE')
+       OR NOT EXISTS (SELECT 1 FROM iam.role_permission WHERE revoked_at IS NULL) THEN
+        RAISE EXCEPTION 'Authorization permission seeds are missing.';
+    END IF;
+END;
+$$;
 
-DECLARE @ExpectedTableList TABLE(schema_name sysname,table_name sysname,PRIMARY KEY(schema_name,table_name));
-INSERT @ExpectedTableList VALUES
-('core','Community'),('core','Organization'),('core','OrganizationMember'),('core','MemberProfile'),('core','Sector'),('core','MemberSector'),('core','MemberGeography'),('core','ProfileFieldVisibility'),('core','MemberVerification'),
-('iam','Member'),('iam','MemberIdentity'),('iam','Role'),('iam','Permission'),('iam','RolePermission'),('iam','MemberRole'),('iam','MemberDevice'),('iam','AuthSession'),
-('consent','ConsentPolicy'),('consent','MemberConsent'),('consent','PrivacyRequest'),('consent','PrivacyRequestTask'),
-('event','Venue'),('event','Event'),('event','EventMatchingPolicy'),('event','EventRegistration'),('event','LiveModeSession'),('event','EventPresence'),
-('social','ConnectionRequest'),('social','Connection'),('social','MemberBlock'),('social','MemberReport'),
-('chat','Conversation'),('chat','ConversationParticipant'),('chat','Message'),('chat','MessageReceipt'),
-('storage','FileAsset'),('storage','FileAssetLink'),
-('notification','NotificationPolicy'),('notification','NotificationPreference'),('notification','PushToken'),('notification','Notification'),('notification','NotificationDeliveryAttempt'),
-('nlp','NlpIntent'),('nlp','NlpEmbedding'),('nlp','NlpModelVersion'),('nlp','NlpRankingConfig'),('nlp','NlpProcessingJob'),('nlp','MatchRequest'),('nlp','NlpMatchResult'),('nlp','NlpFeedback'),('nlp','MatchSuppression'),('nlp','EvaluationDataset'),('nlp','EvaluationPair'),('nlp','EvaluationRun'),
-('moderation','ModerationCase'),('moderation','ModerationAction'),('moderation','ContentRule'),('moderation','ContentScan'),
-('ops','OutboxEvent'),('ops','IdempotencyRecord'),('ops','BackgroundJob'),('ops','SyncChange'),('ops','RetentionPolicy'),('ops','RetentionExecution'),('ops','AuditEvent'),
-('analytics','ProductEvent');
-
-DECLARE @ActualTables int=(SELECT COUNT(*) FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN @ProductSchemas p ON p.schema_name=s.name);
-DECLARE @ActualViews int=(SELECT COUNT(*) FROM sys.views WHERE object_id IN (OBJECT_ID('nlp.vw_MemberContextEligibility'),OBJECT_ID('nlp.vw_MemberRelationship'),OBJECT_ID('chat.vw_AuthorizedConversation'),OBJECT_ID('admin.vw_MemberReview')));
-DECLARE @ActualProcedures int=(SELECT COUNT(*) FROM sys.procedures WHERE object_id IN (OBJECT_ID('nlp.GetRequesterIntent'),OBJECT_ID('nlp.GetEligibleCandidates'),OBJECT_ID('nlp.SaveMatchResults'),OBJECT_ID('nlp.SaveFeedback'),OBJECT_ID('social.AcceptConnectionRequest'),OBJECT_ID('chat.SaveMessage'),OBJECT_ID('event.PurgeExpiredPresence'),OBJECT_ID('notification.TryEnqueue')));
-DECLARE @ActualTriggers int=(SELECT COUNT(*) FROM sys.triggers WHERE object_id IN (OBJECT_ID('storage.trg_FileAssetLink_ResourceIntegrity'),OBJECT_ID('consent.trg_PrivacyRequest_CompletionGuard'),OBJECT_ID('consent.trg_PrivacyRequestTask_CompletedRequestGuard'),OBJECT_ID('ops.trg_RetentionPolicy_ImmutableActive')));
-DECLARE @ActualSequences int=(SELECT COUNT(*) FROM sys.sequences WHERE object_id IN (OBJECT_ID('chat.MessageSequence'),OBJECT_ID('ops.SyncChangeSequence')));
-
-SELECT @ActualTables AS actual_tables,@ExpectedTables AS expected_tables,@ActualViews AS actual_views,@ExpectedViews AS expected_views,
-       @ActualProcedures AS actual_procedures,@ExpectedProcedures AS expected_procedures,@ActualTriggers AS actual_triggers,@ExpectedTriggers AS expected_triggers,
-       @ActualSequences AS actual_sequences,@ExpectedSequences AS expected_sequences;
-
-IF @ActualTables<>@ExpectedTables THROW 50900,'Unexpected OLGA product-table count.',1;
-IF EXISTS (SELECT 1 FROM @ExpectedTableList e WHERE OBJECT_ID(QUOTENAME(e.schema_name)+'.'+QUOTENAME(e.table_name),'U') IS NULL)
-    THROW 50901,'One or more required v2.3 tables are missing.',1;
-IF EXISTS (
-    SELECT 1 FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN @ProductSchemas p ON p.schema_name=s.name
-    WHERE NOT EXISTS (SELECT 1 FROM @ExpectedTableList e WHERE e.schema_name=s.name AND e.table_name=t.name)
-) THROW 50902,'An unexpected table exists in a product schema.',1;
-IF @ActualViews<>@ExpectedViews THROW 50903,'One or more controlled views are missing.',1;
-IF @ActualProcedures<>@ExpectedProcedures THROW 50904,'One or more controlled procedures are missing.',1;
-IF @ActualTriggers<>@ExpectedTriggers THROW 50905,'One or more v2.3 invariant triggers are missing.',1;
-IF @ActualSequences<>@ExpectedSequences THROW 50906,'One or more required sequences are missing.',1;
-IF OBJECT_ID('chat.Attachment','U') IS NOT NULL THROW 50907,'Legacy chat.Attachment must not remain after the v2.3 upgrade.',1;
-IF COL_LENGTH('iam.MemberIdentity','provider_subject') IS NOT NULL THROW 50908,'Plaintext identity subject column remains.',1;
-IF COL_LENGTH('iam.MemberIdentity','provider_subject_hash') IS NULL OR COL_LENGTH('iam.MemberIdentity','provider_subject_ciphertext') IS NULL THROW 50909,'Protected identity subject columns are missing.',1;
-IF COL_LENGTH('core.MemberVerification','evidence_file_asset_id') IS NULL OR COL_LENGTH('consent.PrivacyRequest','result_file_asset_id') IS NULL THROW 50910,'FileAsset references are incomplete.',1;
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE is_not_trusted=1 OR is_disabled=1) THROW 50911,'One or more foreign keys are untrusted or disabled.',1;
-IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE is_not_trusted=1 OR is_disabled=1) THROW 50912,'One or more check constraints are untrusted or disabled.',1;
-IF EXISTS (SELECT 1 FROM sys.triggers WHERE parent_class=1 AND is_disabled=1 AND OBJECT_SCHEMA_NAME(parent_id) IN ('storage','consent','ops')) THROW 50913,'One or more v2.3 invariant triggers are disabled.',1;
-IF EXISTS (SELECT 1 FROM sys.indexes WHERE is_disabled=1 AND object_id IN (SELECT t.object_id FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN @ProductSchemas p ON p.schema_name=s.name)) THROW 50914,'One or more product-table indexes are disabled.',1;
-IF NOT EXISTS (SELECT 1 FROM iam.Permission WHERE status='ACTIVE') OR NOT EXISTS (SELECT 1 FROM iam.RolePermission WHERE revoked_at IS NULL) THROW 50915,'Authorization permission seeds are missing.',1;
-IF EXISTS (SELECT 1 FROM sys.sql_expression_dependencies d WHERE d.referenced_id IS NULL AND d.referenced_entity_name IS NOT NULL AND OBJECT_SCHEMA_NAME(d.referencing_id) IN ('nlp','chat','storage','admin','social','event','notification','consent','ops'))
-    THROW 50916,'One or more database objects have unresolved dependencies.',1;
-
-IF EXISTS (SELECT 1 FROM sys.extended_properties WHERE class = 0 AND name = N'OLGA.SchemaVersion')
-    EXEC sys.sp_updateextendedproperty @name=N'OLGA.SchemaVersion', @value=N'2.3';
-ELSE
-    EXEC sys.sp_addextendedproperty @name=N'OLGA.SchemaVersion', @value=N'2.3';
-
-PRINT 'OLGA Connect Azure SQL v2.3 baseline verification passed.';
-GO
+COMMENT ON SCHEMA ops IS 'OLGA.SchemaVersion=2.3';
+COMMIT;

@@ -1,1538 +1,346 @@
-SET XACT_ABORT ON;
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Member_community_id' AND parent_object_id = OBJECT_ID(N'[iam].[Member]'))
-    ALTER TABLE [iam].[Member] WITH CHECK ADD CONSTRAINT [FK_Member_community_id] FOREIGN KEY ([community_id]) REFERENCES [core].[Community] ([community_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Member_community_id' AND is_not_trusted = 1)
-    ALTER TABLE [iam].[Member] WITH CHECK CHECK CONSTRAINT [FK_Member_community_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberIdentity_member_id' AND parent_object_id = OBJECT_ID(N'[iam].[MemberIdentity]'))
-    ALTER TABLE [iam].[MemberIdentity] WITH CHECK ADD CONSTRAINT [FK_MemberIdentity_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberIdentity_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [iam].[MemberIdentity] WITH CHECK CHECK CONSTRAINT [FK_MemberIdentity_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberRole_member_id' AND parent_object_id = OBJECT_ID(N'[iam].[MemberRole]'))
-    ALTER TABLE [iam].[MemberRole] WITH CHECK ADD CONSTRAINT [FK_MemberRole_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberRole_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [iam].[MemberRole] WITH CHECK CHECK CONSTRAINT [FK_MemberRole_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberRole_role_code' AND parent_object_id = OBJECT_ID(N'[iam].[MemberRole]'))
-    ALTER TABLE [iam].[MemberRole] WITH CHECK ADD CONSTRAINT [FK_MemberRole_role_code] FOREIGN KEY ([role_code]) REFERENCES [iam].[Role] ([role_code]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberRole_role_code' AND is_not_trusted = 1)
-    ALTER TABLE [iam].[MemberRole] WITH CHECK CHECK CONSTRAINT [FK_MemberRole_role_code];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberRole_granted_by' AND parent_object_id = OBJECT_ID(N'[iam].[MemberRole]'))
-    ALTER TABLE [iam].[MemberRole] WITH CHECK ADD CONSTRAINT [FK_MemberRole_granted_by] FOREIGN KEY ([granted_by]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberRole_granted_by' AND is_not_trusted = 1)
-    ALTER TABLE [iam].[MemberRole] WITH CHECK CHECK CONSTRAINT [FK_MemberRole_granted_by];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberDevice_member_id' AND parent_object_id = OBJECT_ID(N'[iam].[MemberDevice]'))
-    ALTER TABLE [iam].[MemberDevice] WITH CHECK ADD CONSTRAINT [FK_MemberDevice_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberDevice_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [iam].[MemberDevice] WITH CHECK CHECK CONSTRAINT [FK_MemberDevice_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Organization_community_id' AND parent_object_id = OBJECT_ID(N'[core].[Organization]'))
-    ALTER TABLE [core].[Organization] WITH CHECK ADD CONSTRAINT [FK_Organization_community_id] FOREIGN KEY ([community_id]) REFERENCES [core].[Community] ([community_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Organization_community_id' AND is_not_trusted = 1)
-    ALTER TABLE [core].[Organization] WITH CHECK CHECK CONSTRAINT [FK_Organization_community_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_OrganizationMember_organization_id' AND parent_object_id = OBJECT_ID(N'[core].[OrganizationMember]'))
-    ALTER TABLE [core].[OrganizationMember] WITH CHECK ADD CONSTRAINT [FK_OrganizationMember_organization_id] FOREIGN KEY ([organization_id]) REFERENCES [core].[Organization] ([organization_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_OrganizationMember_organization_id' AND is_not_trusted = 1)
-    ALTER TABLE [core].[OrganizationMember] WITH CHECK CHECK CONSTRAINT [FK_OrganizationMember_organization_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_OrganizationMember_member_id' AND parent_object_id = OBJECT_ID(N'[core].[OrganizationMember]'))
-    ALTER TABLE [core].[OrganizationMember] WITH CHECK ADD CONSTRAINT [FK_OrganizationMember_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_OrganizationMember_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [core].[OrganizationMember] WITH CHECK CHECK CONSTRAINT [FK_OrganizationMember_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberProfile_member_id' AND parent_object_id = OBJECT_ID(N'[core].[MemberProfile]'))
-    ALTER TABLE [core].[MemberProfile] WITH CHECK ADD CONSTRAINT [FK_MemberProfile_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberProfile_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [core].[MemberProfile] WITH CHECK CHECK CONSTRAINT [FK_MemberProfile_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Sector_parent_sector_code' AND parent_object_id = OBJECT_ID(N'[core].[Sector]'))
-    ALTER TABLE [core].[Sector] WITH CHECK ADD CONSTRAINT [FK_Sector_parent_sector_code] FOREIGN KEY ([parent_sector_code]) REFERENCES [core].[Sector] ([sector_code]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Sector_parent_sector_code' AND is_not_trusted = 1)
-    ALTER TABLE [core].[Sector] WITH CHECK CHECK CONSTRAINT [FK_Sector_parent_sector_code];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberSector_member_id' AND parent_object_id = OBJECT_ID(N'[core].[MemberSector]'))
-    ALTER TABLE [core].[MemberSector] WITH CHECK ADD CONSTRAINT [FK_MemberSector_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberSector_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [core].[MemberSector] WITH CHECK CHECK CONSTRAINT [FK_MemberSector_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberSector_sector_code' AND parent_object_id = OBJECT_ID(N'[core].[MemberSector]'))
-    ALTER TABLE [core].[MemberSector] WITH CHECK ADD CONSTRAINT [FK_MemberSector_sector_code] FOREIGN KEY ([sector_code]) REFERENCES [core].[Sector] ([sector_code]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberSector_sector_code' AND is_not_trusted = 1)
-    ALTER TABLE [core].[MemberSector] WITH CHECK CHECK CONSTRAINT [FK_MemberSector_sector_code];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberGeography_member_id' AND parent_object_id = OBJECT_ID(N'[core].[MemberGeography]'))
-    ALTER TABLE [core].[MemberGeography] WITH CHECK ADD CONSTRAINT [FK_MemberGeography_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberGeography_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [core].[MemberGeography] WITH CHECK CHECK CONSTRAINT [FK_MemberGeography_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ProfileFieldVisibility_member_id' AND parent_object_id = OBJECT_ID(N'[core].[ProfileFieldVisibility]'))
-    ALTER TABLE [core].[ProfileFieldVisibility] WITH CHECK ADD CONSTRAINT [FK_ProfileFieldVisibility_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ProfileFieldVisibility_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [core].[ProfileFieldVisibility] WITH CHECK CHECK CONSTRAINT [FK_ProfileFieldVisibility_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_member_id' AND parent_object_id = OBJECT_ID(N'[core].[MemberVerification]'))
-    ALTER TABLE [core].[MemberVerification] WITH CHECK ADD CONSTRAINT [FK_MemberVerification_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [core].[MemberVerification] WITH CHECK CHECK CONSTRAINT [FK_MemberVerification_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_evidence_file_asset_id' AND parent_object_id = OBJECT_ID(N'[core].[MemberVerification]'))
-    ALTER TABLE [core].[MemberVerification] WITH CHECK ADD CONSTRAINT [FK_MemberVerification_evidence_file_asset_id] FOREIGN KEY ([evidence_file_asset_id]) REFERENCES [storage].[FileAsset] ([file_asset_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_evidence_file_asset_id' AND is_not_trusted = 1)
-    ALTER TABLE [core].[MemberVerification] WITH CHECK CHECK CONSTRAINT [FK_MemberVerification_evidence_file_asset_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_reviewed_by' AND parent_object_id = OBJECT_ID(N'[core].[MemberVerification]'))
-    ALTER TABLE [core].[MemberVerification] WITH CHECK ADD CONSTRAINT [FK_MemberVerification_reviewed_by] FOREIGN KEY ([reviewed_by]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberVerification_reviewed_by' AND is_not_trusted = 1)
-    ALTER TABLE [core].[MemberVerification] WITH CHECK CHECK CONSTRAINT [FK_MemberVerification_reviewed_by];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberConsent_member_id' AND parent_object_id = OBJECT_ID(N'[consent].[MemberConsent]'))
-    ALTER TABLE [consent].[MemberConsent] WITH CHECK ADD CONSTRAINT [FK_MemberConsent_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberConsent_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [consent].[MemberConsent] WITH CHECK CHECK CONSTRAINT [FK_MemberConsent_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberConsent_policy_id' AND parent_object_id = OBJECT_ID(N'[consent].[MemberConsent]'))
-    ALTER TABLE [consent].[MemberConsent] WITH CHECK ADD CONSTRAINT [FK_MemberConsent_policy_id] FOREIGN KEY ([policy_id]) REFERENCES [consent].[ConsentPolicy] ([policy_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberConsent_policy_id' AND is_not_trusted = 1)
-    ALTER TABLE [consent].[MemberConsent] WITH CHECK CHECK CONSTRAINT [FK_MemberConsent_policy_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PrivacyRequest_member_id' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequest]'))
-    ALTER TABLE [consent].[PrivacyRequest] WITH CHECK ADD CONSTRAINT [FK_PrivacyRequest_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PrivacyRequest_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [consent].[PrivacyRequest] WITH CHECK CHECK CONSTRAINT [FK_PrivacyRequest_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PrivacyRequest_result_file_asset_id' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequest]'))
-    ALTER TABLE [consent].[PrivacyRequest] WITH CHECK ADD CONSTRAINT [FK_PrivacyRequest_result_file_asset_id] FOREIGN KEY ([result_file_asset_id]) REFERENCES [storage].[FileAsset] ([file_asset_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PrivacyRequest_result_file_asset_id' AND is_not_trusted = 1)
-    ALTER TABLE [consent].[PrivacyRequest] WITH CHECK CHECK CONSTRAINT [FK_PrivacyRequest_result_file_asset_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Event_community_id' AND parent_object_id = OBJECT_ID(N'[event].[Event]'))
-    ALTER TABLE [event].[Event] WITH CHECK ADD CONSTRAINT [FK_Event_community_id] FOREIGN KEY ([community_id]) REFERENCES [core].[Community] ([community_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Event_community_id' AND is_not_trusted = 1)
-    ALTER TABLE [event].[Event] WITH CHECK CHECK CONSTRAINT [FK_Event_community_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Event_venue_id' AND parent_object_id = OBJECT_ID(N'[event].[Event]'))
-    ALTER TABLE [event].[Event] WITH CHECK ADD CONSTRAINT [FK_Event_venue_id] FOREIGN KEY ([venue_id]) REFERENCES [event].[Venue] ([venue_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Event_venue_id' AND is_not_trusted = 1)
-    ALTER TABLE [event].[Event] WITH CHECK CHECK CONSTRAINT [FK_Event_venue_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EventMatchingPolicy_event_id' AND parent_object_id = OBJECT_ID(N'[event].[EventMatchingPolicy]'))
-    ALTER TABLE [event].[EventMatchingPolicy] WITH CHECK ADD CONSTRAINT [FK_EventMatchingPolicy_event_id] FOREIGN KEY ([event_id]) REFERENCES [event].[Event] ([event_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EventMatchingPolicy_event_id' AND is_not_trusted = 1)
-    ALTER TABLE [event].[EventMatchingPolicy] WITH CHECK CHECK CONSTRAINT [FK_EventMatchingPolicy_event_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EventRegistration_event_id' AND parent_object_id = OBJECT_ID(N'[event].[EventRegistration]'))
-    ALTER TABLE [event].[EventRegistration] WITH CHECK ADD CONSTRAINT [FK_EventRegistration_event_id] FOREIGN KEY ([event_id]) REFERENCES [event].[Event] ([event_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EventRegistration_event_id' AND is_not_trusted = 1)
-    ALTER TABLE [event].[EventRegistration] WITH CHECK CHECK CONSTRAINT [FK_EventRegistration_event_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EventRegistration_member_id' AND parent_object_id = OBJECT_ID(N'[event].[EventRegistration]'))
-    ALTER TABLE [event].[EventRegistration] WITH CHECK ADD CONSTRAINT [FK_EventRegistration_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EventRegistration_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [event].[EventRegistration] WITH CHECK CHECK CONSTRAINT [FK_EventRegistration_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_LiveModeSession_event_id' AND parent_object_id = OBJECT_ID(N'[event].[LiveModeSession]'))
-    ALTER TABLE [event].[LiveModeSession] WITH CHECK ADD CONSTRAINT [FK_LiveModeSession_event_id] FOREIGN KEY ([event_id]) REFERENCES [event].[Event] ([event_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_LiveModeSession_event_id' AND is_not_trusted = 1)
-    ALTER TABLE [event].[LiveModeSession] WITH CHECK CHECK CONSTRAINT [FK_LiveModeSession_event_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_LiveModeSession_member_id' AND parent_object_id = OBJECT_ID(N'[event].[LiveModeSession]'))
-    ALTER TABLE [event].[LiveModeSession] WITH CHECK ADD CONSTRAINT [FK_LiveModeSession_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_LiveModeSession_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [event].[LiveModeSession] WITH CHECK CHECK CONSTRAINT [FK_LiveModeSession_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_LiveModeSession_consent_record_id' AND parent_object_id = OBJECT_ID(N'[event].[LiveModeSession]'))
-    ALTER TABLE [event].[LiveModeSession] WITH CHECK ADD CONSTRAINT [FK_LiveModeSession_consent_record_id] FOREIGN KEY ([consent_record_id]) REFERENCES [consent].[MemberConsent] ([member_consent_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_LiveModeSession_consent_record_id' AND is_not_trusted = 1)
-    ALTER TABLE [event].[LiveModeSession] WITH CHECK CHECK CONSTRAINT [FK_LiveModeSession_consent_record_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EventPresence_live_session_id' AND parent_object_id = OBJECT_ID(N'[event].[EventPresence]'))
-    ALTER TABLE [event].[EventPresence] WITH CHECK ADD CONSTRAINT [FK_EventPresence_live_session_id] FOREIGN KEY ([live_session_id]) REFERENCES [event].[LiveModeSession] ([live_session_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EventPresence_live_session_id' AND is_not_trusted = 1)
-    ALTER TABLE [event].[EventPresence] WITH CHECK CHECK CONSTRAINT [FK_EventPresence_live_session_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConnectionRequest_sender_member_id' AND parent_object_id = OBJECT_ID(N'[social].[ConnectionRequest]'))
-    ALTER TABLE [social].[ConnectionRequest] WITH CHECK ADD CONSTRAINT [FK_ConnectionRequest_sender_member_id] FOREIGN KEY ([sender_member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConnectionRequest_sender_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [social].[ConnectionRequest] WITH CHECK CHECK CONSTRAINT [FK_ConnectionRequest_sender_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConnectionRequest_recipient_member_id' AND parent_object_id = OBJECT_ID(N'[social].[ConnectionRequest]'))
-    ALTER TABLE [social].[ConnectionRequest] WITH CHECK ADD CONSTRAINT [FK_ConnectionRequest_recipient_member_id] FOREIGN KEY ([recipient_member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConnectionRequest_recipient_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [social].[ConnectionRequest] WITH CHECK CHECK CONSTRAINT [FK_ConnectionRequest_recipient_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConnectionRequest_match_result_id' AND parent_object_id = OBJECT_ID(N'[social].[ConnectionRequest]'))
-    ALTER TABLE [social].[ConnectionRequest] WITH CHECK ADD CONSTRAINT [FK_ConnectionRequest_match_result_id] FOREIGN KEY ([match_result_id]) REFERENCES [nlp].[NlpMatchResult] ([match_result_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConnectionRequest_match_result_id' AND is_not_trusted = 1)
-    ALTER TABLE [social].[ConnectionRequest] WITH CHECK CHECK CONSTRAINT [FK_ConnectionRequest_match_result_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Connection_member_low_id' AND parent_object_id = OBJECT_ID(N'[social].[Connection]'))
-    ALTER TABLE [social].[Connection] WITH CHECK ADD CONSTRAINT [FK_Connection_member_low_id] FOREIGN KEY ([member_low_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Connection_member_low_id' AND is_not_trusted = 1)
-    ALTER TABLE [social].[Connection] WITH CHECK CHECK CONSTRAINT [FK_Connection_member_low_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Connection_member_high_id' AND parent_object_id = OBJECT_ID(N'[social].[Connection]'))
-    ALTER TABLE [social].[Connection] WITH CHECK ADD CONSTRAINT [FK_Connection_member_high_id] FOREIGN KEY ([member_high_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Connection_member_high_id' AND is_not_trusted = 1)
-    ALTER TABLE [social].[Connection] WITH CHECK CHECK CONSTRAINT [FK_Connection_member_high_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Connection_accepted_request_id' AND parent_object_id = OBJECT_ID(N'[social].[Connection]'))
-    ALTER TABLE [social].[Connection] WITH CHECK ADD CONSTRAINT [FK_Connection_accepted_request_id] FOREIGN KEY ([accepted_request_id]) REFERENCES [social].[ConnectionRequest] ([connection_request_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Connection_accepted_request_id' AND is_not_trusted = 1)
-    ALTER TABLE [social].[Connection] WITH CHECK CHECK CONSTRAINT [FK_Connection_accepted_request_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberBlock_blocker_member_id' AND parent_object_id = OBJECT_ID(N'[social].[MemberBlock]'))
-    ALTER TABLE [social].[MemberBlock] WITH CHECK ADD CONSTRAINT [FK_MemberBlock_blocker_member_id] FOREIGN KEY ([blocker_member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberBlock_blocker_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [social].[MemberBlock] WITH CHECK CHECK CONSTRAINT [FK_MemberBlock_blocker_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberBlock_blocked_member_id' AND parent_object_id = OBJECT_ID(N'[social].[MemberBlock]'))
-    ALTER TABLE [social].[MemberBlock] WITH CHECK ADD CONSTRAINT [FK_MemberBlock_blocked_member_id] FOREIGN KEY ([blocked_member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberBlock_blocked_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [social].[MemberBlock] WITH CHECK CHECK CONSTRAINT [FK_MemberBlock_blocked_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberReport_reporter_member_id' AND parent_object_id = OBJECT_ID(N'[social].[MemberReport]'))
-    ALTER TABLE [social].[MemberReport] WITH CHECK ADD CONSTRAINT [FK_MemberReport_reporter_member_id] FOREIGN KEY ([reporter_member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberReport_reporter_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [social].[MemberReport] WITH CHECK CHECK CONSTRAINT [FK_MemberReport_reporter_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberReport_reported_member_id' AND parent_object_id = OBJECT_ID(N'[social].[MemberReport]'))
-    ALTER TABLE [social].[MemberReport] WITH CHECK ADD CONSTRAINT [FK_MemberReport_reported_member_id] FOREIGN KEY ([reported_member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MemberReport_reported_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [social].[MemberReport] WITH CHECK CHECK CONSTRAINT [FK_MemberReport_reported_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Conversation_connection_id' AND parent_object_id = OBJECT_ID(N'[chat].[Conversation]'))
-    ALTER TABLE [chat].[Conversation] WITH CHECK ADD CONSTRAINT [FK_Conversation_connection_id] FOREIGN KEY ([connection_id]) REFERENCES [social].[Connection] ([connection_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Conversation_connection_id' AND is_not_trusted = 1)
-    ALTER TABLE [chat].[Conversation] WITH CHECK CHECK CONSTRAINT [FK_Conversation_connection_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConversationParticipant_conversation_id' AND parent_object_id = OBJECT_ID(N'[chat].[ConversationParticipant]'))
-    ALTER TABLE [chat].[ConversationParticipant] WITH CHECK ADD CONSTRAINT [FK_ConversationParticipant_conversation_id] FOREIGN KEY ([conversation_id]) REFERENCES [chat].[Conversation] ([conversation_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConversationParticipant_conversation_id' AND is_not_trusted = 1)
-    ALTER TABLE [chat].[ConversationParticipant] WITH CHECK CHECK CONSTRAINT [FK_ConversationParticipant_conversation_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConversationParticipant_member_id' AND parent_object_id = OBJECT_ID(N'[chat].[ConversationParticipant]'))
-    ALTER TABLE [chat].[ConversationParticipant] WITH CHECK ADD CONSTRAINT [FK_ConversationParticipant_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConversationParticipant_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [chat].[ConversationParticipant] WITH CHECK CHECK CONSTRAINT [FK_ConversationParticipant_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConversationParticipant_last_read_message_id' AND parent_object_id = OBJECT_ID(N'[chat].[ConversationParticipant]'))
-    ALTER TABLE [chat].[ConversationParticipant] WITH CHECK ADD CONSTRAINT [FK_ConversationParticipant_last_read_message_id] FOREIGN KEY ([last_read_message_id]) REFERENCES [chat].[Message] ([message_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ConversationParticipant_last_read_message_id' AND is_not_trusted = 1)
-    ALTER TABLE [chat].[ConversationParticipant] WITH CHECK CHECK CONSTRAINT [FK_ConversationParticipant_last_read_message_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Message_conversation_id' AND parent_object_id = OBJECT_ID(N'[chat].[Message]'))
-    ALTER TABLE [chat].[Message] WITH CHECK ADD CONSTRAINT [FK_Message_conversation_id] FOREIGN KEY ([conversation_id]) REFERENCES [chat].[Conversation] ([conversation_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Message_conversation_id' AND is_not_trusted = 1)
-    ALTER TABLE [chat].[Message] WITH CHECK CHECK CONSTRAINT [FK_Message_conversation_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Message_sender_member_id' AND parent_object_id = OBJECT_ID(N'[chat].[Message]'))
-    ALTER TABLE [chat].[Message] WITH CHECK ADD CONSTRAINT [FK_Message_sender_member_id] FOREIGN KEY ([sender_member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Message_sender_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [chat].[Message] WITH CHECK CHECK CONSTRAINT [FK_Message_sender_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MessageReceipt_message_id' AND parent_object_id = OBJECT_ID(N'[chat].[MessageReceipt]'))
-    ALTER TABLE [chat].[MessageReceipt] WITH CHECK ADD CONSTRAINT [FK_MessageReceipt_message_id] FOREIGN KEY ([message_id]) REFERENCES [chat].[Message] ([message_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MessageReceipt_message_id' AND is_not_trusted = 1)
-    ALTER TABLE [chat].[MessageReceipt] WITH CHECK CHECK CONSTRAINT [FK_MessageReceipt_message_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MessageReceipt_member_id' AND parent_object_id = OBJECT_ID(N'[chat].[MessageReceipt]'))
-    ALTER TABLE [chat].[MessageReceipt] WITH CHECK ADD CONSTRAINT [FK_MessageReceipt_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MessageReceipt_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [chat].[MessageReceipt] WITH CHECK CHECK CONSTRAINT [FK_MessageReceipt_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NotificationPolicy_community_id' AND parent_object_id = OBJECT_ID(N'[notification].[NotificationPolicy]'))
-    ALTER TABLE [notification].[NotificationPolicy] WITH CHECK ADD CONSTRAINT [FK_NotificationPolicy_community_id] FOREIGN KEY ([community_id]) REFERENCES [core].[Community] ([community_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NotificationPolicy_community_id' AND is_not_trusted = 1)
-    ALTER TABLE [notification].[NotificationPolicy] WITH CHECK CHECK CONSTRAINT [FK_NotificationPolicy_community_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NotificationPreference_member_id' AND parent_object_id = OBJECT_ID(N'[notification].[NotificationPreference]'))
-    ALTER TABLE [notification].[NotificationPreference] WITH CHECK ADD CONSTRAINT [FK_NotificationPreference_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NotificationPreference_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [notification].[NotificationPreference] WITH CHECK CHECK CONSTRAINT [FK_NotificationPreference_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PushToken_device_id' AND parent_object_id = OBJECT_ID(N'[notification].[PushToken]'))
-    ALTER TABLE [notification].[PushToken] WITH CHECK ADD CONSTRAINT [FK_PushToken_device_id] FOREIGN KEY ([device_id]) REFERENCES [iam].[MemberDevice] ([device_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PushToken_device_id' AND is_not_trusted = 1)
-    ALTER TABLE [notification].[PushToken] WITH CHECK CHECK CONSTRAINT [FK_PushToken_device_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Notification_member_id' AND parent_object_id = OBJECT_ID(N'[notification].[Notification]'))
-    ALTER TABLE [notification].[Notification] WITH CHECK ADD CONSTRAINT [FK_Notification_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Notification_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [notification].[Notification] WITH CHECK CHECK CONSTRAINT [FK_Notification_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Notification_notification_policy_id' AND parent_object_id = OBJECT_ID(N'[notification].[Notification]'))
-    ALTER TABLE [notification].[Notification] WITH CHECK ADD CONSTRAINT [FK_Notification_notification_policy_id] FOREIGN KEY ([notification_policy_id]) REFERENCES [notification].[NotificationPolicy] ([notification_policy_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Notification_notification_policy_id' AND is_not_trusted = 1)
-    ALTER TABLE [notification].[Notification] WITH CHECK CHECK CONSTRAINT [FK_Notification_notification_policy_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Notification_event_matching_policy_id' AND parent_object_id = OBJECT_ID(N'[notification].[Notification]'))
-    ALTER TABLE [notification].[Notification] WITH CHECK ADD CONSTRAINT [FK_Notification_event_matching_policy_id] FOREIGN KEY ([event_matching_policy_id]) REFERENCES [event].[EventMatchingPolicy] ([event_matching_policy_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Notification_event_matching_policy_id' AND is_not_trusted = 1)
-    ALTER TABLE [notification].[Notification] WITH CHECK CHECK CONSTRAINT [FK_Notification_event_matching_policy_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NotificationDeliveryAttempt_notification_id' AND parent_object_id = OBJECT_ID(N'[notification].[NotificationDeliveryAttempt]'))
-    ALTER TABLE [notification].[NotificationDeliveryAttempt] WITH CHECK ADD CONSTRAINT [FK_NotificationDeliveryAttempt_notification_id] FOREIGN KEY ([notification_id]) REFERENCES [notification].[Notification] ([notification_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NotificationDeliveryAttempt_notification_id' AND is_not_trusted = 1)
-    ALTER TABLE [notification].[NotificationDeliveryAttempt] WITH CHECK CHECK CONSTRAINT [FK_NotificationDeliveryAttempt_notification_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NotificationDeliveryAttempt_push_token_id' AND parent_object_id = OBJECT_ID(N'[notification].[NotificationDeliveryAttempt]'))
-    ALTER TABLE [notification].[NotificationDeliveryAttempt] WITH CHECK ADD CONSTRAINT [FK_NotificationDeliveryAttempt_push_token_id] FOREIGN KEY ([push_token_id]) REFERENCES [notification].[PushToken] ([push_token_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NotificationDeliveryAttempt_push_token_id' AND is_not_trusted = 1)
-    ALTER TABLE [notification].[NotificationDeliveryAttempt] WITH CHECK CHECK CONSTRAINT [FK_NotificationDeliveryAttempt_push_token_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpIntent_member_id' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpIntent]'))
-    ALTER TABLE [nlp].[NlpIntent] WITH CHECK ADD CONSTRAINT [FK_NlpIntent_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpIntent_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpIntent] WITH CHECK CHECK CONSTRAINT [FK_NlpIntent_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpEmbedding_intent_id' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpEmbedding]'))
-    ALTER TABLE [nlp].[NlpEmbedding] WITH CHECK ADD CONSTRAINT [FK_NlpEmbedding_intent_id] FOREIGN KEY ([intent_id]) REFERENCES [nlp].[NlpIntent] ([intent_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpEmbedding_intent_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpEmbedding] WITH CHECK CHECK CONSTRAINT [FK_NlpEmbedding_intent_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpEmbedding_model_version' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpEmbedding]'))
-    ALTER TABLE [nlp].[NlpEmbedding] WITH CHECK ADD CONSTRAINT [FK_NlpEmbedding_model_version] FOREIGN KEY ([model_version]) REFERENCES [nlp].[NlpModelVersion] ([model_version]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpEmbedding_model_version' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpEmbedding] WITH CHECK CHECK CONSTRAINT [FK_NlpEmbedding_model_version];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpProcessingJob_intent_id' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpProcessingJob]'))
-    ALTER TABLE [nlp].[NlpProcessingJob] WITH CHECK ADD CONSTRAINT [FK_NlpProcessingJob_intent_id] FOREIGN KEY ([intent_id]) REFERENCES [nlp].[NlpIntent] ([intent_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpProcessingJob_intent_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpProcessingJob] WITH CHECK CHECK CONSTRAINT [FK_NlpProcessingJob_intent_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchRequest_requester_id' AND parent_object_id = OBJECT_ID(N'[nlp].[MatchRequest]'))
-    ALTER TABLE [nlp].[MatchRequest] WITH CHECK ADD CONSTRAINT [FK_MatchRequest_requester_id] FOREIGN KEY ([requester_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchRequest_requester_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[MatchRequest] WITH CHECK CHECK CONSTRAINT [FK_MatchRequest_requester_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchRequest_intent_id' AND parent_object_id = OBJECT_ID(N'[nlp].[MatchRequest]'))
-    ALTER TABLE [nlp].[MatchRequest] WITH CHECK ADD CONSTRAINT [FK_MatchRequest_intent_id] FOREIGN KEY ([intent_id]) REFERENCES [nlp].[NlpIntent] ([intent_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchRequest_intent_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[MatchRequest] WITH CHECK CHECK CONSTRAINT [FK_MatchRequest_intent_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchRequest_model_version' AND parent_object_id = OBJECT_ID(N'[nlp].[MatchRequest]'))
-    ALTER TABLE [nlp].[MatchRequest] WITH CHECK ADD CONSTRAINT [FK_MatchRequest_model_version] FOREIGN KEY ([model_version]) REFERENCES [nlp].[NlpModelVersion] ([model_version]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchRequest_model_version' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[MatchRequest] WITH CHECK CHECK CONSTRAINT [FK_MatchRequest_model_version];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchRequest_ranking_version' AND parent_object_id = OBJECT_ID(N'[nlp].[MatchRequest]'))
-    ALTER TABLE [nlp].[MatchRequest] WITH CHECK ADD CONSTRAINT [FK_MatchRequest_ranking_version] FOREIGN KEY ([ranking_version]) REFERENCES [nlp].[NlpRankingConfig] ([ranking_version]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchRequest_ranking_version' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[MatchRequest] WITH CHECK CHECK CONSTRAINT [FK_MatchRequest_ranking_version];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpMatchResult_request_id' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]'))
-    ALTER TABLE [nlp].[NlpMatchResult] WITH CHECK ADD CONSTRAINT [FK_NlpMatchResult_request_id] FOREIGN KEY ([request_id]) REFERENCES [nlp].[MatchRequest] ([request_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpMatchResult_request_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpMatchResult] WITH CHECK CHECK CONSTRAINT [FK_NlpMatchResult_request_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpMatchResult_requester_id' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]'))
-    ALTER TABLE [nlp].[NlpMatchResult] WITH CHECK ADD CONSTRAINT [FK_NlpMatchResult_requester_id] FOREIGN KEY ([requester_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpMatchResult_requester_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpMatchResult] WITH CHECK CHECK CONSTRAINT [FK_NlpMatchResult_requester_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpMatchResult_candidate_id' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]'))
-    ALTER TABLE [nlp].[NlpMatchResult] WITH CHECK ADD CONSTRAINT [FK_NlpMatchResult_candidate_id] FOREIGN KEY ([candidate_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpMatchResult_candidate_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpMatchResult] WITH CHECK CHECK CONSTRAINT [FK_NlpMatchResult_candidate_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpMatchResult_model_version' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]'))
-    ALTER TABLE [nlp].[NlpMatchResult] WITH CHECK ADD CONSTRAINT [FK_NlpMatchResult_model_version] FOREIGN KEY ([model_version]) REFERENCES [nlp].[NlpModelVersion] ([model_version]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpMatchResult_model_version' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpMatchResult] WITH CHECK CHECK CONSTRAINT [FK_NlpMatchResult_model_version];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpMatchResult_ranking_version' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]'))
-    ALTER TABLE [nlp].[NlpMatchResult] WITH CHECK ADD CONSTRAINT [FK_NlpMatchResult_ranking_version] FOREIGN KEY ([ranking_version]) REFERENCES [nlp].[NlpRankingConfig] ([ranking_version]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpMatchResult_ranking_version' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpMatchResult] WITH CHECK CHECK CONSTRAINT [FK_NlpMatchResult_ranking_version];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpFeedback_supersedes_feedback_id' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpFeedback]'))
-    ALTER TABLE [nlp].[NlpFeedback] WITH CHECK ADD CONSTRAINT [FK_NlpFeedback_supersedes_feedback_id] FOREIGN KEY ([supersedes_feedback_id]) REFERENCES [nlp].[NlpFeedback] ([feedback_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpFeedback_supersedes_feedback_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpFeedback] WITH CHECK CHECK CONSTRAINT [FK_NlpFeedback_supersedes_feedback_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpFeedback_match_result_id' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpFeedback]'))
-    ALTER TABLE [nlp].[NlpFeedback] WITH CHECK ADD CONSTRAINT [FK_NlpFeedback_match_result_id] FOREIGN KEY ([match_result_id]) REFERENCES [nlp].[NlpMatchResult] ([match_result_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpFeedback_match_result_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpFeedback] WITH CHECK CHECK CONSTRAINT [FK_NlpFeedback_match_result_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpFeedback_request_id' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpFeedback]'))
-    ALTER TABLE [nlp].[NlpFeedback] WITH CHECK ADD CONSTRAINT [FK_NlpFeedback_request_id] FOREIGN KEY ([request_id]) REFERENCES [nlp].[MatchRequest] ([request_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpFeedback_request_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpFeedback] WITH CHECK CHECK CONSTRAINT [FK_NlpFeedback_request_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpFeedback_requester_id' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpFeedback]'))
-    ALTER TABLE [nlp].[NlpFeedback] WITH CHECK ADD CONSTRAINT [FK_NlpFeedback_requester_id] FOREIGN KEY ([requester_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpFeedback_requester_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpFeedback] WITH CHECK CHECK CONSTRAINT [FK_NlpFeedback_requester_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpFeedback_candidate_id' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpFeedback]'))
-    ALTER TABLE [nlp].[NlpFeedback] WITH CHECK ADD CONSTRAINT [FK_NlpFeedback_candidate_id] FOREIGN KEY ([candidate_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_NlpFeedback_candidate_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[NlpFeedback] WITH CHECK CHECK CONSTRAINT [FK_NlpFeedback_candidate_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchSuppression_member_id' AND parent_object_id = OBJECT_ID(N'[nlp].[MatchSuppression]'))
-    ALTER TABLE [nlp].[MatchSuppression] WITH CHECK ADD CONSTRAINT [FK_MatchSuppression_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchSuppression_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[MatchSuppression] WITH CHECK CHECK CONSTRAINT [FK_MatchSuppression_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchSuppression_intent_id' AND parent_object_id = OBJECT_ID(N'[nlp].[MatchSuppression]'))
-    ALTER TABLE [nlp].[MatchSuppression] WITH CHECK ADD CONSTRAINT [FK_MatchSuppression_intent_id] FOREIGN KEY ([intent_id]) REFERENCES [nlp].[NlpIntent] ([intent_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchSuppression_intent_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[MatchSuppression] WITH CHECK CHECK CONSTRAINT [FK_MatchSuppression_intent_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchSuppression_created_by' AND parent_object_id = OBJECT_ID(N'[nlp].[MatchSuppression]'))
-    ALTER TABLE [nlp].[MatchSuppression] WITH CHECK ADD CONSTRAINT [FK_MatchSuppression_created_by] FOREIGN KEY ([created_by]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_MatchSuppression_created_by' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[MatchSuppression] WITH CHECK CHECK CONSTRAINT [FK_MatchSuppression_created_by];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EvaluationDataset_approved_by' AND parent_object_id = OBJECT_ID(N'[nlp].[EvaluationDataset]'))
-    ALTER TABLE [nlp].[EvaluationDataset] WITH CHECK ADD CONSTRAINT [FK_EvaluationDataset_approved_by] FOREIGN KEY ([approved_by]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EvaluationDataset_approved_by' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[EvaluationDataset] WITH CHECK CHECK CONSTRAINT [FK_EvaluationDataset_approved_by];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EvaluationPair_dataset_id' AND parent_object_id = OBJECT_ID(N'[nlp].[EvaluationPair]'))
-    ALTER TABLE [nlp].[EvaluationPair] WITH CHECK ADD CONSTRAINT [FK_EvaluationPair_dataset_id] FOREIGN KEY ([dataset_id]) REFERENCES [nlp].[EvaluationDataset] ([dataset_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EvaluationPair_dataset_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[EvaluationPair] WITH CHECK CHECK CONSTRAINT [FK_EvaluationPair_dataset_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EvaluationRun_dataset_id' AND parent_object_id = OBJECT_ID(N'[nlp].[EvaluationRun]'))
-    ALTER TABLE [nlp].[EvaluationRun] WITH CHECK ADD CONSTRAINT [FK_EvaluationRun_dataset_id] FOREIGN KEY ([dataset_id]) REFERENCES [nlp].[EvaluationDataset] ([dataset_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EvaluationRun_dataset_id' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[EvaluationRun] WITH CHECK CHECK CONSTRAINT [FK_EvaluationRun_dataset_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EvaluationRun_model_version' AND parent_object_id = OBJECT_ID(N'[nlp].[EvaluationRun]'))
-    ALTER TABLE [nlp].[EvaluationRun] WITH CHECK ADD CONSTRAINT [FK_EvaluationRun_model_version] FOREIGN KEY ([model_version]) REFERENCES [nlp].[NlpModelVersion] ([model_version]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EvaluationRun_model_version' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[EvaluationRun] WITH CHECK CHECK CONSTRAINT [FK_EvaluationRun_model_version];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EvaluationRun_ranking_version' AND parent_object_id = OBJECT_ID(N'[nlp].[EvaluationRun]'))
-    ALTER TABLE [nlp].[EvaluationRun] WITH CHECK ADD CONSTRAINT [FK_EvaluationRun_ranking_version] FOREIGN KEY ([ranking_version]) REFERENCES [nlp].[NlpRankingConfig] ([ranking_version]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_EvaluationRun_ranking_version' AND is_not_trusted = 1)
-    ALTER TABLE [nlp].[EvaluationRun] WITH CHECK CHECK CONSTRAINT [FK_EvaluationRun_ranking_version];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ModerationCase_subject_member_id' AND parent_object_id = OBJECT_ID(N'[moderation].[ModerationCase]'))
-    ALTER TABLE [moderation].[ModerationCase] WITH CHECK ADD CONSTRAINT [FK_ModerationCase_subject_member_id] FOREIGN KEY ([subject_member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ModerationCase_subject_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [moderation].[ModerationCase] WITH CHECK CHECK CONSTRAINT [FK_ModerationCase_subject_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ModerationCase_assigned_to' AND parent_object_id = OBJECT_ID(N'[moderation].[ModerationCase]'))
-    ALTER TABLE [moderation].[ModerationCase] WITH CHECK ADD CONSTRAINT [FK_ModerationCase_assigned_to] FOREIGN KEY ([assigned_to]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ModerationCase_assigned_to' AND is_not_trusted = 1)
-    ALTER TABLE [moderation].[ModerationCase] WITH CHECK CHECK CONSTRAINT [FK_ModerationCase_assigned_to];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ModerationAction_moderation_case_id' AND parent_object_id = OBJECT_ID(N'[moderation].[ModerationAction]'))
-    ALTER TABLE [moderation].[ModerationAction] WITH CHECK ADD CONSTRAINT [FK_ModerationAction_moderation_case_id] FOREIGN KEY ([moderation_case_id]) REFERENCES [moderation].[ModerationCase] ([moderation_case_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ModerationAction_moderation_case_id' AND is_not_trusted = 1)
-    ALTER TABLE [moderation].[ModerationAction] WITH CHECK CHECK CONSTRAINT [FK_ModerationAction_moderation_case_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ModerationAction_actor_member_id' AND parent_object_id = OBJECT_ID(N'[moderation].[ModerationAction]'))
-    ALTER TABLE [moderation].[ModerationAction] WITH CHECK ADD CONSTRAINT [FK_ModerationAction_actor_member_id] FOREIGN KEY ([actor_member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ModerationAction_actor_member_id' AND is_not_trusted = 1)
-    ALTER TABLE [moderation].[ModerationAction] WITH CHECK CHECK CONSTRAINT [FK_ModerationAction_actor_member_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ContentRule_created_by' AND parent_object_id = OBJECT_ID(N'[moderation].[ContentRule]'))
-    ALTER TABLE [moderation].[ContentRule] WITH CHECK ADD CONSTRAINT [FK_ContentRule_created_by] FOREIGN KEY ([created_by]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ContentRule_created_by' AND is_not_trusted = 1)
-    ALTER TABLE [moderation].[ContentRule] WITH CHECK CHECK CONSTRAINT [FK_ContentRule_created_by];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ProductEvent_community_id' AND parent_object_id = OBJECT_ID(N'[analytics].[ProductEvent]'))
-    ALTER TABLE [analytics].[ProductEvent] WITH CHECK ADD CONSTRAINT [FK_ProductEvent_community_id] FOREIGN KEY ([community_id]) REFERENCES [core].[Community] ([community_id]);
-GO
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_ProductEvent_community_id' AND is_not_trusted = 1)
-    ALTER TABLE [analytics].[ProductEvent] WITH CHECK CHECK CONSTRAINT [FK_ProductEvent_community_id];
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Member_status' AND parent_object_id = OBJECT_ID(N'[iam].[Member]'))
-    ALTER TABLE [iam].[Member] WITH CHECK ADD CONSTRAINT [CK_Member_status] CHECK ([status] IN (N'PENDING',N'ACTIVE',N'SUSPENDED',N'DELETED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MemberDevice_platform' AND parent_object_id = OBJECT_ID(N'[iam].[MemberDevice]'))
-    ALTER TABLE [iam].[MemberDevice] WITH CHECK ADD CONSTRAINT [CK_MemberDevice_platform] CHECK ([platform] IN (N'IOS',N'ANDROID'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MemberDevice_status' AND parent_object_id = OBJECT_ID(N'[iam].[MemberDevice]'))
-    ALTER TABLE [iam].[MemberDevice] WITH CHECK ADD CONSTRAINT [CK_MemberDevice_status] CHECK ([status] IN (N'ACTIVE',N'REVOKED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MemberProfile_profile_status' AND parent_object_id = OBJECT_ID(N'[core].[MemberProfile]'))
-    ALTER TABLE [core].[MemberProfile] WITH CHECK ADD CONSTRAINT [CK_MemberProfile_profile_status] CHECK ([profile_status] IN (N'DRAFT',N'ACTIVE',N'HIDDEN'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MemberProfile_visibility' AND parent_object_id = OBJECT_ID(N'[core].[MemberProfile]'))
-    ALTER TABLE [core].[MemberProfile] WITH CHECK ADD CONSTRAINT [CK_MemberProfile_visibility] CHECK ([visibility] IN (N'PUBLIC',N'MEMBERS',N'CONNECTED',N'HIDDEN'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MemberConsent_decision' AND parent_object_id = OBJECT_ID(N'[consent].[MemberConsent]'))
-    ALTER TABLE [consent].[MemberConsent] WITH CHECK ADD CONSTRAINT [CK_MemberConsent_decision] CHECK ([decision] IN (N'GRANTED',N'DENIED',N'WITHDRAWN'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Event_status' AND parent_object_id = OBJECT_ID(N'[event].[Event]'))
-    ALTER TABLE [event].[Event] WITH CHECK ADD CONSTRAINT [CK_Event_status] CHECK ([status] IN (N'DRAFT',N'PUBLISHED',N'ACTIVE',N'COMPLETED',N'CANCELLED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_EventMatchingPolicy_status' AND parent_object_id = OBJECT_ID(N'[event].[EventMatchingPolicy]'))
-    ALTER TABLE [event].[EventMatchingPolicy] WITH CHECK ADD CONSTRAINT [CK_EventMatchingPolicy_status] CHECK ([status] IN (N'DRAFT',N'ACTIVE',N'RETIRED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_EventMatchingPolicy_proximity_mode' AND parent_object_id = OBJECT_ID(N'[event].[EventMatchingPolicy]'))
-    ALTER TABLE [event].[EventMatchingPolicy] WITH CHECK ADD CONSTRAINT [CK_EventMatchingPolicy_proximity_mode] CHECK ([proximity_mode] IN (N'NONE',N'VENUE',N'COARSE_CELL'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_EventRegistration_status' AND parent_object_id = OBJECT_ID(N'[event].[EventRegistration]'))
-    ALTER TABLE [event].[EventRegistration] WITH CHECK ADD CONSTRAINT [CK_EventRegistration_status] CHECK ([status] IN (N'INVITED',N'REGISTERED',N'CHECKED_IN',N'CANCELLED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_LiveModeSession_status' AND parent_object_id = OBJECT_ID(N'[event].[LiveModeSession]'))
-    ALTER TABLE [event].[LiveModeSession] WITH CHECK ADD CONSTRAINT [CK_LiveModeSession_status] CHECK ([status] IN (N'ACTIVE',N'DISABLED',N'EXPIRED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_ConnectionRequest_status' AND parent_object_id = OBJECT_ID(N'[social].[ConnectionRequest]'))
-    ALTER TABLE [social].[ConnectionRequest] WITH CHECK ADD CONSTRAINT [CK_ConnectionRequest_status] CHECK ([status] IN (N'PENDING',N'ACCEPTED',N'DECLINED',N'WITHDRAWN',N'EXPIRED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Connection_status' AND parent_object_id = OBJECT_ID(N'[social].[Connection]'))
-    ALTER TABLE [social].[Connection] WITH CHECK ADD CONSTRAINT [CK_Connection_status] CHECK ([status] IN (N'ACTIVE',N'DISCONNECTED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Conversation_status' AND parent_object_id = OBJECT_ID(N'[chat].[Conversation]'))
-    ALTER TABLE [chat].[Conversation] WITH CHECK ADD CONSTRAINT [CK_Conversation_status] CHECK ([status] IN (N'ACTIVE',N'CLOSED',N'RESTRICTED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Message_message_type' AND parent_object_id = OBJECT_ID(N'[chat].[Message]'))
-    ALTER TABLE [chat].[Message] WITH CHECK ADD CONSTRAINT [CK_Message_message_type] CHECK ([message_type] IN (N'TEXT',N'FILE',N'SYSTEM'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NotificationPolicy_channel' AND parent_object_id = OBJECT_ID(N'[notification].[NotificationPolicy]'))
-    ALTER TABLE [notification].[NotificationPolicy] WITH CHECK ADD CONSTRAINT [CK_NotificationPolicy_channel] CHECK ([channel] IN (N'PUSH',N'EMAIL',N'IN_APP'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NotificationPolicy_status' AND parent_object_id = OBJECT_ID(N'[notification].[NotificationPolicy]'))
-    ALTER TABLE [notification].[NotificationPolicy] WITH CHECK ADD CONSTRAINT [CK_NotificationPolicy_status] CHECK ([status] IN (N'DRAFT',N'ACTIVE',N'RETIRED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NotificationPolicy_quiet_hours_behavior' AND parent_object_id = OBJECT_ID(N'[notification].[NotificationPolicy]'))
-    ALTER TABLE [notification].[NotificationPolicy] WITH CHECK ADD CONSTRAINT [CK_NotificationPolicy_quiet_hours_behavior] CHECK ([quiet_hours_behavior] IN (N'DEFER',N'SUPPRESS',N'BYPASS'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_PushToken_provider' AND parent_object_id = OBJECT_ID(N'[notification].[PushToken]'))
-    ALTER TABLE [notification].[PushToken] WITH CHECK ADD CONSTRAINT [CK_PushToken_provider] CHECK ([provider] IN (N'APNS',N'FCM'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_PushToken_status' AND parent_object_id = OBJECT_ID(N'[notification].[PushToken]'))
-    ALTER TABLE [notification].[PushToken] WITH CHECK ADD CONSTRAINT [CK_PushToken_status] CHECK ([status] IN (N'ACTIVE',N'INVALID'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Notification_channel' AND parent_object_id = OBJECT_ID(N'[notification].[Notification]'))
-    ALTER TABLE [notification].[Notification] WITH CHECK ADD CONSTRAINT [CK_Notification_channel] CHECK ([channel] IN (N'PUSH',N'EMAIL',N'IN_APP'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Notification_status' AND parent_object_id = OBJECT_ID(N'[notification].[Notification]'))
-    ALTER TABLE [notification].[Notification] WITH CHECK ADD CONSTRAINT [CK_Notification_status] CHECK ([status] IN (N'PENDING',N'SENT',N'DELIVERED',N'FAILED',N'SUPPRESSED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NotificationDeliveryAttempt_status' AND parent_object_id = OBJECT_ID(N'[notification].[NotificationDeliveryAttempt]'))
-    ALTER TABLE [notification].[NotificationDeliveryAttempt] WITH CHECK ADD CONSTRAINT [CK_NotificationDeliveryAttempt_status] CHECK ([status] IN (N'STARTED',N'ACCEPTED',N'DELIVERED',N'FAILED',N'EXPIRED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NlpIntent_intent_type' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpIntent]'))
-    ALTER TABLE [nlp].[NlpIntent] WITH CHECK ADD CONSTRAINT [CK_NlpIntent_intent_type] CHECK ([intent_type] IN (N'WANT',N'OFFER'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NlpIntent_status' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpIntent]'))
-    ALTER TABLE [nlp].[NlpIntent] WITH CHECK ADD CONSTRAINT [CK_NlpIntent_status] CHECK ([status] IN (N'PROCESSING',N'MATCH_READY',N'FAILED',N'INACTIVE'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NlpEmbedding_status' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpEmbedding]'))
-    ALTER TABLE [nlp].[NlpEmbedding] WITH CHECK ADD CONSTRAINT [CK_NlpEmbedding_status] CHECK ([status] IN (N'ACTIVE',N'SUPERSEDED',N'FAILED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NlpModelVersion_status' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpModelVersion]'))
-    ALTER TABLE [nlp].[NlpModelVersion] WITH CHECK ADD CONSTRAINT [CK_NlpModelVersion_status] CHECK ([status] IN (N'CANDIDATE',N'ACTIVE',N'RETIRED',N'ROLLED_BACK'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NlpProcessingJob_job_type' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpProcessingJob]'))
-    ALTER TABLE [nlp].[NlpProcessingJob] WITH CHECK ADD CONSTRAINT [CK_NlpProcessingJob_job_type] CHECK ([job_type] IN (N'EMBED',N'REEMBED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NlpProcessingJob_status' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpProcessingJob]'))
-    ALTER TABLE [nlp].[NlpProcessingJob] WITH CHECK ADD CONSTRAINT [CK_NlpProcessingJob_status] CHECK ([status] IN (N'PENDING',N'RUNNING',N'SUCCEEDED',N'FAILED',N'DEAD'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MatchRequest_status' AND parent_object_id = OBJECT_ID(N'[nlp].[MatchRequest]'))
-    ALTER TABLE [nlp].[MatchRequest] WITH CHECK ADD CONSTRAINT [CK_MatchRequest_status] CHECK ([status] IN (N'PROCESSING',N'COMPLETED',N'FAILED'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NlpFeedback_label' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpFeedback]'))
-    ALTER TABLE [nlp].[NlpFeedback] WITH CHECK ADD CONSTRAINT [CK_NlpFeedback_label] CHECK ([label] IN (N'USEFUL',N'NOT_USEFUL',N'INAPPROPRIATE'));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MemberProfile_Completeness' AND parent_object_id = OBJECT_ID(N'[core].[MemberProfile]'))
-    ALTER TABLE [core].[MemberProfile] WITH CHECK ADD CONSTRAINT [CK_MemberProfile_Completeness] CHECK ([completeness_score] BETWEEN 0 AND 100);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Event_DateRange' AND parent_object_id = OBJECT_ID(N'[event].[Event]'))
-    ALTER TABLE [event].[Event] WITH CHECK ADD CONSTRAINT [CK_Event_DateRange] CHECK ([ends_at] > [starts_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_EventMatchingPolicy_Thresholds' AND parent_object_id = OBJECT_ID(N'[event].[EventMatchingPolicy]'))
-    ALTER TABLE [event].[EventMatchingPolicy] WITH CHECK ADD CONSTRAINT [CK_EventMatchingPolicy_Thresholds] CHECK (([match_threshold_override] IS NULL OR [match_threshold_override] BETWEEN 0 AND 1) AND [alert_confidence_threshold] BETWEEN 0 AND 1);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_EventMatchingPolicy_Limits' AND parent_object_id = OBJECT_ID(N'[event].[EventMatchingPolicy]'))
-    ALTER TABLE [event].[EventMatchingPolicy] WITH CHECK ADD CONSTRAINT [CK_EventMatchingPolicy_Limits] CHECK ([max_match_alerts_per_hour] >= 0 AND [max_match_alerts_per_event] >= 0 AND [minimum_alert_interval_minutes] >= 0 AND ([effective_to] IS NULL OR [effective_to] > [effective_from]));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_EventMatchingPolicy_Proximity' AND parent_object_id = OBJECT_ID(N'[event].[EventMatchingPolicy]'))
-    ALTER TABLE [event].[EventMatchingPolicy] WITH CHECK ADD CONSTRAINT [CK_EventMatchingPolicy_Proximity] CHECK ([check_in_required] = 0 OR [registration_required] = 1);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_ConnectionRequest_Members' AND parent_object_id = OBJECT_ID(N'[social].[ConnectionRequest]'))
-    ALTER TABLE [social].[ConnectionRequest] WITH CHECK ADD CONSTRAINT [CK_ConnectionRequest_Members] CHECK ([sender_member_id] <> [recipient_member_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_ConnectionRequest_Expiry' AND parent_object_id = OBJECT_ID(N'[social].[ConnectionRequest]'))
-    ALTER TABLE [social].[ConnectionRequest] WITH CHECK ADD CONSTRAINT [CK_ConnectionRequest_Expiry] CHECK ([expires_at] > [created_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Connection_CanonicalPair' AND parent_object_id = OBJECT_ID(N'[social].[Connection]'))
-    ALTER TABLE [social].[Connection] WITH CHECK ADD CONSTRAINT [CK_Connection_CanonicalPair] CHECK ([member_low_id] < [member_high_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MemberBlock_Members' AND parent_object_id = OBJECT_ID(N'[social].[MemberBlock]'))
-    ALTER TABLE [social].[MemberBlock] WITH CHECK ADD CONSTRAINT [CK_MemberBlock_Members] CHECK ([blocker_member_id] <> [blocked_member_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NotificationPolicy_Limits' AND parent_object_id = OBJECT_ID(N'[notification].[NotificationPolicy]'))
-    ALTER TABLE [notification].[NotificationPolicy] WITH CHECK ADD CONSTRAINT [CK_NotificationPolicy_Limits] CHECK ([dedupe_window_seconds] > 0 AND [max_per_hour] > 0 AND [max_per_day] > 0 AND [max_attempts] > 0 AND [ttl_minutes] > 0 AND ([effective_to] IS NULL OR [effective_to] > [effective_from]));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Notification_Confidence' AND parent_object_id = OBJECT_ID(N'[notification].[Notification]'))
-    ALTER TABLE [notification].[Notification] WITH CHECK ADD CONSTRAINT [CK_Notification_Confidence] CHECK ([source_confidence] IS NULL OR [source_confidence] BETWEEN 0 AND 1);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Notification_Expiry' AND parent_object_id = OBJECT_ID(N'[notification].[Notification]'))
-    ALTER TABLE [notification].[Notification] WITH CHECK ADD CONSTRAINT [CK_Notification_Expiry] CHECK ([expires_at] > [created_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NotificationDeliveryAttempt_Attempt' AND parent_object_id = OBJECT_ID(N'[notification].[NotificationDeliveryAttempt]'))
-    ALTER TABLE [notification].[NotificationDeliveryAttempt] WITH CHECK ADD CONSTRAINT [CK_NotificationDeliveryAttempt_Attempt] CHECK ([attempt_number] > 0 AND ([duration_ms] IS NULL OR [duration_ms] >= 0));
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NlpRankingConfig_Weights' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpRankingConfig]'))
-    ALTER TABLE [nlp].[NlpRankingConfig] WITH CHECK ADD CONSTRAINT [CK_NlpRankingConfig_Weights] CHECK ([semantic_weight] BETWEEN 0 AND 1 AND [category_weight] BETWEEN 0 AND 1 AND [industry_weight] BETWEEN 0 AND 1 AND [geography_weight] BETWEEN 0 AND 1 AND [freshness_weight] BETWEEN 0 AND 1 AND [event_weight] BETWEEN 0 AND 1 AND [threshold] BETWEEN 0 AND 1);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MatchRequest_Limit' AND parent_object_id = OBJECT_ID(N'[nlp].[MatchRequest]'))
-    ALTER TABLE [nlp].[MatchRequest] WITH CHECK ADD CONSTRAINT [CK_MatchRequest_Limit] CHECK ([requested_limit] BETWEEN 3 AND 7);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_NlpMatchResult_Scores' AND parent_object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]'))
-    ALTER TABLE [nlp].[NlpMatchResult] WITH CHECK ADD CONSTRAINT [CK_NlpMatchResult_Scores] CHECK ([semantic_score] BETWEEN 0 AND 1 AND ([reciprocal_score] IS NULL OR [reciprocal_score] BETWEEN 0 AND 1) AND [final_score] BETWEEN 0 AND 1 AND [rank] > 0);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[Community]') AND name = N'UX_Community_Name')
-    CREATE UNIQUE INDEX [UX_Community_Name] ON [core].[Community] ([name]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberIdentity]') AND name = N'UX_MemberIdentity_ProviderSubjectHash')
-    CREATE UNIQUE INDEX [UX_MemberIdentity_ProviderSubjectHash] ON [iam].[MemberIdentity] ([provider], [provider_subject_hash]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberIdentity]') AND name = N'UX_MemberIdentity_Primary')
-    CREATE UNIQUE INDEX [UX_MemberIdentity_Primary] ON [iam].[MemberIdentity] ([member_id]) WHERE is_primary = 1;
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[Role]') AND name = N'UX_Role_Name')
-    CREATE UNIQUE INDEX [UX_Role_Name] ON [iam].[Role] ([name]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[Organization]') AND name = N'UX_Organization_CommunityName')
-    CREATE UNIQUE INDEX [UX_Organization_CommunityName] ON [core].[Organization] ([community_id], [normalized_name]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[OrganizationMember]') AND name = N'UX_OrganizationMember_Active')
-    CREATE UNIQUE INDEX [UX_OrganizationMember_Active] ON [core].[OrganizationMember] ([organization_id], [member_id]) WHERE ended_on IS NULL;
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberSector]') AND name = N'UX_MemberSector_Primary')
-    CREATE UNIQUE INDEX [UX_MemberSector_Primary] ON [core].[MemberSector] ([member_id]) WHERE is_primary = 1;
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberGeography]') AND name = N'UX_MemberGeography_Primary')
-    CREATE UNIQUE INDEX [UX_MemberGeography_Primary] ON [core].[MemberGeography] ([member_id]) WHERE is_primary = 1;
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[ConsentPolicy]') AND name = N'UX_ConsentPolicy_PurposeVersionLocale')
-    CREATE UNIQUE INDEX [UX_ConsentPolicy_PurposeVersionLocale] ON [consent].[ConsentPolicy] ([purpose_code], [version], [locale]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventMatchingPolicy]') AND name = N'UX_EventMatchingPolicy_Version')
-    CREATE UNIQUE INDEX [UX_EventMatchingPolicy_Version] ON [event].[EventMatchingPolicy] ([event_id], [policy_version]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventMatchingPolicy]') AND name = N'UX_EventMatchingPolicy_Active')
-    CREATE UNIQUE INDEX [UX_EventMatchingPolicy_Active] ON [event].[EventMatchingPolicy] ([event_id]) WHERE status = 'ACTIVE';
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventRegistration]') AND name = N'UX_EventRegistration_EventMember')
-    CREATE UNIQUE INDEX [UX_EventRegistration_EventMember] ON [event].[EventRegistration] ([event_id], [member_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[LiveModeSession]') AND name = N'UX_LiveModeSession_Active')
-    CREATE UNIQUE INDEX [UX_LiveModeSession_Active] ON [event].[LiveModeSession] ([event_id], [member_id]) WHERE status = 'ACTIVE';
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[ConnectionRequest]') AND name = N'UX_ConnectionRequest_OpenPair')
-    CREATE UNIQUE INDEX [UX_ConnectionRequest_OpenPair] ON [social].[ConnectionRequest] ([sender_member_id], [recipient_member_id]) WHERE status = 'PENDING';
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[Connection]') AND name = N'UX_Connection_Pair')
-    CREATE UNIQUE INDEX [UX_Connection_Pair] ON [social].[Connection] ([member_low_id], [member_high_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[Connection]') AND name = N'UX_Connection_AcceptedRequest')
-    CREATE UNIQUE INDEX [UX_Connection_AcceptedRequest] ON [social].[Connection] ([accepted_request_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[MemberBlock]') AND name = N'UX_MemberBlock_Active')
-    CREATE UNIQUE INDEX [UX_MemberBlock_Active] ON [social].[MemberBlock] ([blocker_member_id], [blocked_member_id]) WHERE removed_at IS NULL;
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Conversation]') AND name = N'UX_Conversation_Connection')
-    CREATE UNIQUE INDEX [UX_Conversation_Connection] ON [chat].[Conversation] ([connection_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Message]') AND name = N'UX_Message_ConversationMessage')
-    CREATE UNIQUE INDEX [UX_Message_ConversationMessage] ON [chat].[Message] ([conversation_id], [message_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[NotificationPolicy]') AND name = N'UX_NotificationPolicy_Version')
-    CREATE UNIQUE INDEX [UX_NotificationPolicy_Version] ON [notification].[NotificationPolicy] ([community_id], [purpose_code], [channel], [policy_version]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[NotificationPolicy]') AND name = N'UX_NotificationPolicy_Active')
-    CREATE UNIQUE INDEX [UX_NotificationPolicy_Active] ON [notification].[NotificationPolicy] ([community_id], [purpose_code], [channel]) WHERE status = 'ACTIVE';
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[PushToken]') AND name = N'UX_PushToken_Fingerprint')
-    CREATE UNIQUE INDEX [UX_PushToken_Fingerprint] ON [notification].[PushToken] ([token_fingerprint]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[Notification]') AND name = N'UX_Notification_Dedupe')
-    CREATE UNIQUE INDEX [UX_Notification_Dedupe] ON [notification].[Notification] ([member_id], [channel], [dedupe_key], [dedupe_bucket_start]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[NotificationDeliveryAttempt]') AND name = N'UX_NotificationAttempt_Number')
-    CREATE UNIQUE INDEX [UX_NotificationAttempt_Number] ON [notification].[NotificationDeliveryAttempt] ([notification_id], [attempt_number]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpEmbedding]') AND name = N'UX_NlpEmbedding_HashModel')
-    CREATE UNIQUE INDEX [UX_NlpEmbedding_HashModel] ON [nlp].[NlpEmbedding] ([intent_id], [normalized_hash], [model_version]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpModelVersion]') AND name = N'UX_NlpModelVersion_Active')
-    CREATE UNIQUE INDEX [UX_NlpModelVersion_Active] ON [nlp].[NlpModelVersion] ([status]) WHERE status = 'ACTIVE';
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpRankingConfig]') AND name = N'UX_NlpRankingConfig_Active')
-    CREATE UNIQUE INDEX [UX_NlpRankingConfig_Active] ON [nlp].[NlpRankingConfig] ([active_to]) WHERE active_to IS NULL;
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpProcessingJob]') AND name = N'UX_NlpProcessingJob_Active')
-    CREATE UNIQUE INDEX [UX_NlpProcessingJob_Active] ON [nlp].[NlpProcessingJob] ([intent_id], [job_type]) WHERE status IN ('PENDING','RUNNING');
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]') AND name = N'UX_NlpMatchResult_RequestCandidate')
-    CREATE UNIQUE INDEX [UX_NlpMatchResult_RequestCandidate] ON [nlp].[NlpMatchResult] ([request_id], [candidate_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]') AND name = N'UX_NlpMatchResult_RequestRank')
-    CREATE UNIQUE INDEX [UX_NlpMatchResult_RequestRank] ON [nlp].[NlpMatchResult] ([request_id], [rank]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpFeedback]') AND name = N'UX_NlpFeedback_Original')
-    CREATE UNIQUE INDEX [UX_NlpFeedback_Original] ON [nlp].[NlpFeedback] ([match_result_id], [requester_id]) WHERE supersedes_feedback_id IS NULL;
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpFeedback]') AND name = N'UX_NlpFeedback_Superseded')
-    CREATE UNIQUE INDEX [UX_NlpFeedback_Superseded] ON [nlp].[NlpFeedback] ([supersedes_feedback_id]) WHERE supersedes_feedback_id IS NOT NULL;
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationDataset]') AND name = N'UX_EvaluationDataset_NameVersion')
-    CREATE UNIQUE INDEX [UX_EvaluationDataset_NameVersion] ON [nlp].[EvaluationDataset] ([name], [version]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[Member]') AND name = N'IX_Member_CommunityStatus')
-    CREATE INDEX [IX_Member_CommunityStatus] ON [iam].[Member] ([community_id], [status]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberProfile]') AND name = N'IX_MemberProfile_Discovery')
-    CREATE INDEX [IX_MemberProfile_Discovery] ON [core].[MemberProfile] ([profile_status], [visibility], [updated_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[Event]') AND name = N'IX_Event_CommunityStatusStart')
-    CREATE INDEX [IX_Event_CommunityStatusStart] ON [event].[Event] ([community_id], [status], [starts_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventPresence]') AND name = N'IX_EventPresence_CellExpiry')
-    CREATE INDEX [IX_EventPresence_CellExpiry] ON [event].[EventPresence] ([coarse_cell], [expires_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[ConnectionRequest]') AND name = N'IX_ConnectionRequest_RecipientStatusExpiry')
-    CREATE INDEX [IX_ConnectionRequest_RecipientStatusExpiry] ON [social].[ConnectionRequest] ([recipient_member_id], [status], [expires_at], [created_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Message]') AND name = N'IX_Message_ConversationSequence')
-    CREATE INDEX [IX_Message_ConversationSequence] ON [chat].[Message] ([conversation_id], [server_sequence]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[Notification]') AND name = N'IX_Notification_Due')
-    CREATE INDEX [IX_Notification_Due] ON [notification].[Notification] ([status], [scheduled_at], [expires_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[Notification]') AND name = N'IX_Notification_RateLimit')
-    CREATE INDEX [IX_Notification_RateLimit] ON [notification].[Notification] ([member_id], [notification_policy_id], [created_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[Notification]') AND name = N'IX_Notification_EventLimit')
-    CREATE INDEX [IX_Notification_EventLimit] ON [notification].[Notification] ([member_id], [event_matching_policy_id], [context_id], [created_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[NotificationDeliveryAttempt]') AND name = N'IX_NotificationAttempt_Retry')
-    CREATE INDEX [IX_NotificationAttempt_Retry] ON [notification].[NotificationDeliveryAttempt] ([status], [next_attempt_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpIntent]') AND name = N'IX_NlpIntent_ContextTypeStatusExpiry')
-    CREATE INDEX [IX_NlpIntent_ContextTypeStatusExpiry] ON [nlp].[NlpIntent] ([context_id], [intent_type], [status], [expires_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchRequest]') AND name = N'IX_MatchRequest_RequesterCreated')
-    CREATE INDEX [IX_MatchRequest_RequesterCreated] ON [nlp].[MatchRequest] ([requester_id], [created_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]') AND name = N'IX_NlpMatchResult_CandidateCreated')
-    CREATE INDEX [IX_NlpMatchResult_CandidateCreated] ON [nlp].[NlpMatchResult] ([candidate_id], [created_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[OutboxEvent]') AND name = N'IX_OutboxEvent_Due')
-    CREATE INDEX [IX_OutboxEvent_Due] ON [ops].[OutboxEvent] ([published_at], [next_attempt_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[BackgroundJob]') AND name = N'IX_BackgroundJob_Due')
-    CREATE INDEX [IX_BackgroundJob_Due] ON [ops].[BackgroundJob] ([status], [available_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[IdempotencyRecord]') AND name = N'IX_IdempotencyRecord_Expiry')
-    CREATE INDEX [IX_IdempotencyRecord_Expiry] ON [ops].[IdempotencyRecord] ([expires_at]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[analytics].[ProductEvent]') AND name = N'IX_ProductEvent_NameOccurred')
-    CREATE INDEX [IX_ProductEvent_NameOccurred] ON [analytics].[ProductEvent] ([event_name], [occurred_at]);
-GO
-
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberRole]') AND name = N'IX_MemberRole_granted_by')
-    CREATE INDEX [IX_MemberRole_granted_by] ON [iam].[MemberRole] ([granted_by]);
-GO
-
-
-
-
-
-
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberVerification]') AND name = N'IX_MemberVerification_evidence_file_asset_id')
-    CREATE INDEX [IX_MemberVerification_evidence_file_asset_id] ON [core].[MemberVerification] ([evidence_file_asset_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberVerification]') AND name = N'IX_MemberVerification_reviewed_by')
-    CREATE INDEX [IX_MemberVerification_reviewed_by] ON [core].[MemberVerification] ([reviewed_by]);
-GO
-
-
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequest]') AND name = N'IX_PrivacyRequest_result_file_asset_id')
-    CREATE INDEX [IX_PrivacyRequest_result_file_asset_id] ON [consent].[PrivacyRequest] ([result_file_asset_id]);
-GO
-
-
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[LiveModeSession]') AND name = N'IX_LiveModeSession_consent_record_id')
-    CREATE INDEX [IX_LiveModeSession_consent_record_id] ON [event].[LiveModeSession] ([consent_record_id]);
-GO
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[ConnectionRequest]') AND name = N'IX_ConnectionRequest_match_result_id')
-    CREATE INDEX [IX_ConnectionRequest_match_result_id] ON [social].[ConnectionRequest] ([match_result_id]);
-GO
-
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[MemberReport]') AND name = N'IX_MemberReport_reporter_member_id')
-    CREATE INDEX [IX_MemberReport_reporter_member_id] ON [social].[MemberReport] ([reporter_member_id]);
-GO
-
-
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[ConversationParticipant]') AND name = N'IX_ConversationParticipant_last_read_message_id')
-    CREATE INDEX [IX_ConversationParticipant_last_read_message_id] ON [chat].[ConversationParticipant] ([last_read_message_id]);
-GO
-
-
-
-
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[Notification]') AND name = N'IX_Notification_notification_policy_id')
-    CREATE INDEX [IX_Notification_notification_policy_id] ON [notification].[Notification] ([notification_policy_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[Notification]') AND name = N'IX_Notification_event_matching_policy_id')
-    CREATE INDEX [IX_Notification_event_matching_policy_id] ON [notification].[Notification] ([event_matching_policy_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[NotificationDeliveryAttempt]') AND name = N'IX_NotificationDeliveryAttempt_push_token_id')
-    CREATE INDEX [IX_NotificationDeliveryAttempt_push_token_id] ON [notification].[NotificationDeliveryAttempt] ([push_token_id]);
-GO
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpEmbedding]') AND name = N'IX_NlpEmbedding_model_version')
-    CREATE INDEX [IX_NlpEmbedding_model_version] ON [nlp].[NlpEmbedding] ([model_version]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchRequest]') AND name = N'IX_MatchRequest_intent_id')
-    CREATE INDEX [IX_MatchRequest_intent_id] ON [nlp].[MatchRequest] ([intent_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchRequest]') AND name = N'IX_MatchRequest_model_version')
-    CREATE INDEX [IX_MatchRequest_model_version] ON [nlp].[MatchRequest] ([model_version]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchRequest]') AND name = N'IX_MatchRequest_ranking_version')
-    CREATE INDEX [IX_MatchRequest_ranking_version] ON [nlp].[MatchRequest] ([ranking_version]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]') AND name = N'IX_NlpMatchResult_requester_id')
-    CREATE INDEX [IX_NlpMatchResult_requester_id] ON [nlp].[NlpMatchResult] ([requester_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]') AND name = N'IX_NlpMatchResult_model_version')
-    CREATE INDEX [IX_NlpMatchResult_model_version] ON [nlp].[NlpMatchResult] ([model_version]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpMatchResult]') AND name = N'IX_NlpMatchResult_ranking_version')
-    CREATE INDEX [IX_NlpMatchResult_ranking_version] ON [nlp].[NlpMatchResult] ([ranking_version]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpFeedback]') AND name = N'IX_NlpFeedback_request_id')
-    CREATE INDEX [IX_NlpFeedback_request_id] ON [nlp].[NlpFeedback] ([request_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpFeedback]') AND name = N'IX_NlpFeedback_requester_id')
-    CREATE INDEX [IX_NlpFeedback_requester_id] ON [nlp].[NlpFeedback] ([requester_id]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpFeedback]') AND name = N'IX_NlpFeedback_candidate_id')
-    CREATE INDEX [IX_NlpFeedback_candidate_id] ON [nlp].[NlpFeedback] ([candidate_id]);
-GO
-
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchSuppression]') AND name = N'IX_MatchSuppression_created_by')
-    CREATE INDEX [IX_MatchSuppression_created_by] ON [nlp].[MatchSuppression] ([created_by]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationDataset]') AND name = N'IX_EvaluationDataset_approved_by')
-    CREATE INDEX [IX_EvaluationDataset_approved_by] ON [nlp].[EvaluationDataset] ([approved_by]);
-GO
-
-
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationRun]') AND name = N'IX_EvaluationRun_ranking_version')
-    CREATE INDEX [IX_EvaluationRun_ranking_version] ON [nlp].[EvaluationRun] ([ranking_version]);
-GO
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationCase]') AND name = N'IX_ModerationCase_assigned_to')
-    CREATE INDEX [IX_ModerationCase_assigned_to] ON [moderation].[ModerationCase] ([assigned_to]);
-GO
-
-
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ContentRule]') AND name = N'IX_ContentRule_created_by')
-    CREATE INDEX [IX_ContentRule_created_by] ON [moderation].[ContentRule] ([created_by]);
-GO
-
-
+SELECT ops.add_constraint_if_missing('iam', 'member', 'fk_member_community_id', $constraint$FOREIGN KEY (community_id) REFERENCES core.community (community_id)$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'member_identity', 'fk_member_identity_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'member_role', 'fk_member_role_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'member_role', 'fk_member_role_role_code', $constraint$FOREIGN KEY (role_code) REFERENCES iam.role (role_code)$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'member_role', 'fk_member_role_granted_by', $constraint$FOREIGN KEY (granted_by) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'member_device', 'fk_member_device_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'organization', 'fk_organization_community_id', $constraint$FOREIGN KEY (community_id) REFERENCES core.community (community_id)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'organization_member', 'fk_organization_member_organization_id', $constraint$FOREIGN KEY (organization_id) REFERENCES core.organization (organization_id)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'organization_member', 'fk_organization_member_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'member_profile', 'fk_member_profile_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'sector', 'fk_sector_parent_sector_code', $constraint$FOREIGN KEY (parent_sector_code) REFERENCES core.sector (sector_code)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'member_sector', 'fk_member_sector_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'member_sector', 'fk_member_sector_sector_code', $constraint$FOREIGN KEY (sector_code) REFERENCES core.sector (sector_code)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'member_geography', 'fk_member_geography_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'profile_field_visibility', 'fk_profile_field_visibility_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'member_verification', 'fk_member_verification_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'member_verification', 'fk_member_verification_evidence_file_asset_id', $constraint$FOREIGN KEY (evidence_file_asset_id) REFERENCES storage.file_asset (file_asset_id)$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'member_verification', 'fk_member_verification_reviewed_by', $constraint$FOREIGN KEY (reviewed_by) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('consent', 'member_consent', 'fk_member_consent_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('consent', 'member_consent', 'fk_member_consent_policy_id', $constraint$FOREIGN KEY (policy_id) REFERENCES consent.consent_policy (policy_id)$constraint$);
+SELECT ops.add_constraint_if_missing('consent', 'privacy_request', 'fk_privacy_request_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('consent', 'privacy_request', 'fk_privacy_request_result_file_asset_id', $constraint$FOREIGN KEY (result_file_asset_id) REFERENCES storage.file_asset (file_asset_id)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event', 'fk_event_community_id', $constraint$FOREIGN KEY (community_id) REFERENCES core.community (community_id)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event', 'fk_event_venue_id', $constraint$FOREIGN KEY (venue_id) REFERENCES event.venue (venue_id)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event_matching_policy', 'fk_event_matching_policy_event_id', $constraint$FOREIGN KEY (event_id) REFERENCES event.event (event_id)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event_registration', 'fk_event_registration_event_id', $constraint$FOREIGN KEY (event_id) REFERENCES event.event (event_id)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event_registration', 'fk_event_registration_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'live_mode_session', 'fk_live_mode_session_event_id', $constraint$FOREIGN KEY (event_id) REFERENCES event.event (event_id)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'live_mode_session', 'fk_live_mode_session_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'live_mode_session', 'fk_live_mode_session_consent_record_id', $constraint$FOREIGN KEY (consent_record_id) REFERENCES consent.member_consent (member_consent_id)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event_presence', 'fk_event_presence_live_session_id', $constraint$FOREIGN KEY (live_session_id) REFERENCES event.live_mode_session (live_session_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'connection_request', 'fk_connection_request_sender_member_id', $constraint$FOREIGN KEY (sender_member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'connection_request', 'fk_connection_request_recipient_member_id', $constraint$FOREIGN KEY (recipient_member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'connection_request', 'fk_connection_request_match_result_id', $constraint$FOREIGN KEY (match_result_id) REFERENCES nlp.nlp_match_result (match_result_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'connection', 'fk_connection_member_low_id', $constraint$FOREIGN KEY (member_low_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'connection', 'fk_connection_member_high_id', $constraint$FOREIGN KEY (member_high_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'connection', 'fk_connection_accepted_request_id', $constraint$FOREIGN KEY (accepted_request_id) REFERENCES social.connection_request (connection_request_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'member_block', 'fk_member_block_blocker_member_id', $constraint$FOREIGN KEY (blocker_member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'member_block', 'fk_member_block_blocked_member_id', $constraint$FOREIGN KEY (blocked_member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'member_report', 'fk_member_report_reporter_member_id', $constraint$FOREIGN KEY (reporter_member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'member_report', 'fk_member_report_reported_member_id', $constraint$FOREIGN KEY (reported_member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'conversation', 'fk_conversation_connection_id', $constraint$FOREIGN KEY (connection_id) REFERENCES social.connection (connection_id)$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'conversation_participant', 'fk_conversation_participant_conversation_id', $constraint$FOREIGN KEY (conversation_id) REFERENCES chat.conversation (conversation_id)$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'conversation_participant', 'fk_conversation_participant_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'conversation_participant', 'fk_conversation_participant_last_read_message_id', $constraint$FOREIGN KEY (last_read_message_id) REFERENCES chat.message (message_id)$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'message', 'fk_message_conversation_id', $constraint$FOREIGN KEY (conversation_id) REFERENCES chat.conversation (conversation_id)$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'message', 'fk_message_sender_member_id', $constraint$FOREIGN KEY (sender_member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'message_receipt', 'fk_message_receipt_message_id', $constraint$FOREIGN KEY (message_id) REFERENCES chat.message (message_id)$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'message_receipt', 'fk_message_receipt_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification_policy', 'fk_notification_policy_community_id', $constraint$FOREIGN KEY (community_id) REFERENCES core.community (community_id)$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification_preference', 'fk_notification_preference_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'push_token', 'fk_push_token_device_id', $constraint$FOREIGN KEY (device_id) REFERENCES iam.member_device (device_id)$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification', 'fk_notification_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification', 'fk_notification_notification_policy_id', $constraint$FOREIGN KEY (notification_policy_id) REFERENCES notification.notification_policy (notification_policy_id)$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification', 'fk_notification_event_matching_policy_id', $constraint$FOREIGN KEY (event_matching_policy_id) REFERENCES event.event_matching_policy (event_matching_policy_id)$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification_delivery_attempt', 'fk_notification_delivery_attempt_notification_id', $constraint$FOREIGN KEY (notification_id) REFERENCES notification.notification (notification_id)$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification_delivery_attempt', 'fk_notification_delivery_attempt_push_token_id', $constraint$FOREIGN KEY (push_token_id) REFERENCES notification.push_token (push_token_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_intent', 'fk_nlp_intent_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_embedding', 'fk_nlp_embedding_intent_id', $constraint$FOREIGN KEY (intent_id) REFERENCES nlp.nlp_intent (intent_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_embedding', 'fk_nlp_embedding_model_version', $constraint$FOREIGN KEY (model_version) REFERENCES nlp.nlp_model_version (model_version)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_processing_job', 'fk_nlp_processing_job_intent_id', $constraint$FOREIGN KEY (intent_id) REFERENCES nlp.nlp_intent (intent_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'match_request', 'fk_match_request_requester_id', $constraint$FOREIGN KEY (requester_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'match_request', 'fk_match_request_intent_id', $constraint$FOREIGN KEY (intent_id) REFERENCES nlp.nlp_intent (intent_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'match_request', 'fk_match_request_model_version', $constraint$FOREIGN KEY (model_version) REFERENCES nlp.nlp_model_version (model_version)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'match_request', 'fk_match_request_ranking_version', $constraint$FOREIGN KEY (ranking_version) REFERENCES nlp.nlp_ranking_config (ranking_version)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_match_result', 'fk_nlp_match_result_request_id', $constraint$FOREIGN KEY (request_id) REFERENCES nlp.match_request (request_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_match_result', 'fk_nlp_match_result_requester_id', $constraint$FOREIGN KEY (requester_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_match_result', 'fk_nlp_match_result_candidate_id', $constraint$FOREIGN KEY (candidate_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_match_result', 'fk_nlp_match_result_model_version', $constraint$FOREIGN KEY (model_version) REFERENCES nlp.nlp_model_version (model_version)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_match_result', 'fk_nlp_match_result_ranking_version', $constraint$FOREIGN KEY (ranking_version) REFERENCES nlp.nlp_ranking_config (ranking_version)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_feedback', 'fk_nlp_feedback_supersedes_feedback_id', $constraint$FOREIGN KEY (supersedes_feedback_id) REFERENCES nlp.nlp_feedback (feedback_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_feedback', 'fk_nlp_feedback_match_result_id', $constraint$FOREIGN KEY (match_result_id) REFERENCES nlp.nlp_match_result (match_result_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_feedback', 'fk_nlp_feedback_request_id', $constraint$FOREIGN KEY (request_id) REFERENCES nlp.match_request (request_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_feedback', 'fk_nlp_feedback_requester_id', $constraint$FOREIGN KEY (requester_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_feedback', 'fk_nlp_feedback_candidate_id', $constraint$FOREIGN KEY (candidate_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'match_suppression', 'fk_match_suppression_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'match_suppression', 'fk_match_suppression_intent_id', $constraint$FOREIGN KEY (intent_id) REFERENCES nlp.nlp_intent (intent_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'match_suppression', 'fk_match_suppression_created_by', $constraint$FOREIGN KEY (created_by) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'evaluation_dataset', 'fk_evaluation_dataset_approved_by', $constraint$FOREIGN KEY (approved_by) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'evaluation_pair', 'fk_evaluation_pair_dataset_id', $constraint$FOREIGN KEY (dataset_id) REFERENCES nlp.evaluation_dataset (dataset_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'evaluation_run', 'fk_evaluation_run_dataset_id', $constraint$FOREIGN KEY (dataset_id) REFERENCES nlp.evaluation_dataset (dataset_id)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'evaluation_run', 'fk_evaluation_run_model_version', $constraint$FOREIGN KEY (model_version) REFERENCES nlp.nlp_model_version (model_version)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'evaluation_run', 'fk_evaluation_run_ranking_version', $constraint$FOREIGN KEY (ranking_version) REFERENCES nlp.nlp_ranking_config (ranking_version)$constraint$);
+SELECT ops.add_constraint_if_missing('moderation', 'moderation_case', 'fk_moderation_case_subject_member_id', $constraint$FOREIGN KEY (subject_member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('moderation', 'moderation_case', 'fk_moderation_case_assigned_to', $constraint$FOREIGN KEY (assigned_to) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('moderation', 'moderation_action', 'fk_moderation_action_moderation_case_id', $constraint$FOREIGN KEY (moderation_case_id) REFERENCES moderation.moderation_case (moderation_case_id)$constraint$);
+SELECT ops.add_constraint_if_missing('moderation', 'moderation_action', 'fk_moderation_action_actor_member_id', $constraint$FOREIGN KEY (actor_member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('moderation', 'content_rule', 'fk_content_rule_created_by', $constraint$FOREIGN KEY (created_by) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('analytics', 'product_event', 'fk_product_event_community_id', $constraint$FOREIGN KEY (community_id) REFERENCES core.community (community_id)$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'member', 'ck_member_status', $constraint$CHECK (status IN ('PENDING','ACTIVE','SUSPENDED','DELETED'))$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'member_device', 'ck_member_device_platform', $constraint$CHECK (platform IN ('IOS','ANDROID'))$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'member_device', 'ck_member_device_status', $constraint$CHECK (status IN ('ACTIVE','REVOKED'))$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'member_profile', 'ck_member_profile_profile_status', $constraint$CHECK (profile_status IN ('DRAFT','ACTIVE','HIDDEN'))$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'member_profile', 'ck_member_profile_visibility', $constraint$CHECK (visibility IN ('PUBLIC','MEMBERS','CONNECTED','HIDDEN'))$constraint$);
+SELECT ops.add_constraint_if_missing('consent', 'member_consent', 'ck_member_consent_decision', $constraint$CHECK (decision IN ('GRANTED','DENIED','WITHDRAWN'))$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event', 'ck_event_status', $constraint$CHECK (status IN ('DRAFT','PUBLISHED','ACTIVE','COMPLETED','CANCELLED'))$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event_matching_policy', 'ck_event_matching_policy_status', $constraint$CHECK (status IN ('DRAFT','ACTIVE','RETIRED'))$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event_matching_policy', 'ck_event_matching_policy_proximity_mode', $constraint$CHECK (proximity_mode IN ('NONE','VENUE','COARSE_CELL'))$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event_registration', 'ck_event_registration_status', $constraint$CHECK (status IN ('INVITED','REGISTERED','CHECKED_IN','CANCELLED'))$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'live_mode_session', 'ck_live_mode_session_status', $constraint$CHECK (status IN ('ACTIVE','DISABLED','EXPIRED'))$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'connection_request', 'ck_connection_request_status', $constraint$CHECK (status IN ('PENDING','ACCEPTED','DECLINED','WITHDRAWN','EXPIRED'))$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'connection', 'ck_connection_status', $constraint$CHECK (status IN ('ACTIVE','DISCONNECTED'))$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'conversation', 'ck_conversation_status', $constraint$CHECK (status IN ('ACTIVE','CLOSED','RESTRICTED'))$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'message', 'ck_message_message_type', $constraint$CHECK (message_type IN ('TEXT','FILE','SYSTEM'))$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification_policy', 'ck_notification_policy_channel', $constraint$CHECK (channel IN ('PUSH','EMAIL','IN_APP'))$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification_policy', 'ck_notification_policy_status', $constraint$CHECK (status IN ('DRAFT','ACTIVE','RETIRED'))$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification_policy', 'ck_notification_policy_quiet_hours_behavior', $constraint$CHECK (quiet_hours_behavior IN ('DEFER','SUPPRESS','BYPASS'))$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'push_token', 'ck_push_token_provider', $constraint$CHECK (provider IN ('APNS','FCM'))$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'push_token', 'ck_push_token_status', $constraint$CHECK (status IN ('ACTIVE','INVALID'))$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification', 'ck_notification_channel', $constraint$CHECK (channel IN ('PUSH','EMAIL','IN_APP'))$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification', 'ck_notification_status', $constraint$CHECK (status IN ('PENDING','SENT','DELIVERED','FAILED','SUPPRESSED'))$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification_delivery_attempt', 'ck_notification_delivery_attempt_status', $constraint$CHECK (status IN ('STARTED','ACCEPTED','DELIVERED','FAILED','EXPIRED'))$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_intent', 'ck_nlp_intent_intent_type', $constraint$CHECK (intent_type IN ('WANT','OFFER'))$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_intent', 'ck_nlp_intent_status', $constraint$CHECK (status IN ('PROCESSING','MATCH_READY','FAILED','INACTIVE'))$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_embedding', 'ck_nlp_embedding_status', $constraint$CHECK (status IN ('ACTIVE','SUPERSEDED','FAILED'))$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_embedding', 'ck_nlp_embedding_dimensions', $constraint$CHECK (dimensions = 1536)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_model_version', 'ck_nlp_model_version_status', $constraint$CHECK (status IN ('CANDIDATE','ACTIVE','RETIRED','ROLLED_BACK'))$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_model_version', 'ck_nlp_model_version_dimensions', $constraint$CHECK (dimensions = 1536)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_processing_job', 'ck_nlp_processing_job_job_type', $constraint$CHECK (job_type IN ('EMBED','REEMBED'))$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_processing_job', 'ck_nlp_processing_job_status', $constraint$CHECK (status IN ('PENDING','RUNNING','SUCCEEDED','FAILED','DEAD'))$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'match_request', 'ck_match_request_status', $constraint$CHECK (status IN ('PROCESSING','COMPLETED','FAILED'))$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_feedback', 'ck_nlp_feedback_label', $constraint$CHECK (label IN ('USEFUL','NOT_USEFUL','INAPPROPRIATE'))$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'member_profile', 'ck_member_profile_completeness', $constraint$CHECK (completeness_score BETWEEN 0 AND 100)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event', 'ck_event_date_range', $constraint$CHECK (ends_at > starts_at)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event_matching_policy', 'ck_event_matching_policy_thresholds', $constraint$CHECK ((match_threshold_override IS NULL OR match_threshold_override BETWEEN 0 AND 1) AND alert_confidence_threshold BETWEEN 0 AND 1)$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event_matching_policy', 'ck_event_matching_policy_limits', $constraint$CHECK (max_match_alerts_per_hour >= 0 AND max_match_alerts_per_event >= 0 AND minimum_alert_interval_minutes >= 0 AND (effective_to IS NULL OR effective_to > effective_from))$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'event_matching_policy', 'ck_event_matching_policy_proximity', $constraint$CHECK ((check_in_required IS FALSE OR registration_required IS TRUE) AND (proximity_mode <> 'COARSE_CELL' OR (live_mode_required IS TRUE AND max_presence_age_minutes IS NOT NULL AND max_presence_age_minutes > 0)))$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'connection_request', 'ck_connection_request_members', $constraint$CHECK (sender_member_id <> recipient_member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'connection_request', 'ck_connection_request_expiry', $constraint$CHECK (expires_at > created_at)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'connection', 'ck_connection_canonical_pair', $constraint$CHECK (member_low_id < member_high_id)$constraint$);
+SELECT ops.add_constraint_if_missing('social', 'member_block', 'ck_member_block_members', $constraint$CHECK (blocker_member_id <> blocked_member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification_policy', 'ck_notification_policy_limits', $constraint$CHECK (dedupe_window_seconds > 0 AND max_per_hour > 0 AND max_per_day > 0 AND max_attempts > 0 AND ttl_minutes > 0 AND (effective_to IS NULL OR effective_to > effective_from))$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification', 'ck_notification_confidence', $constraint$CHECK (source_confidence IS NULL OR source_confidence BETWEEN 0 AND 1)$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification', 'ck_notification_expiry', $constraint$CHECK (expires_at > created_at)$constraint$);
+SELECT ops.add_constraint_if_missing('notification', 'notification_delivery_attempt', 'ck_notification_delivery_attempt_attempt', $constraint$CHECK (attempt_number > 0 AND (duration_ms IS NULL OR duration_ms >= 0))$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_ranking_config', 'ck_nlp_ranking_config_weights', $constraint$CHECK (semantic_weight BETWEEN 0 AND 1 AND category_weight BETWEEN 0 AND 1 AND industry_weight BETWEEN 0 AND 1 AND geography_weight BETWEEN 0 AND 1 AND freshness_weight BETWEEN 0 AND 1 AND event_weight BETWEEN 0 AND 1 AND threshold BETWEEN 0 AND 1)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'match_request', 'ck_match_request_limit', $constraint$CHECK (requested_limit BETWEEN 3 AND 7)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'nlp_match_result', 'ck_nlp_match_result_scores', $constraint$CHECK (semantic_score BETWEEN 0 AND 1 AND (reciprocal_score IS NULL OR reciprocal_score BETWEEN 0 AND 1) AND final_score BETWEEN 0 AND 1 AND rank > 0)$constraint$);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_community_name ON core.community (name);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_member_identity_provider_subject_hash ON iam.member_identity (provider, provider_subject_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_member_identity_primary ON iam.member_identity (member_id) WHERE is_primary IS TRUE;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_role_name ON iam.role (name);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_organization_community_name ON core.organization (community_id, normalized_name);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_organization_member_active ON core.organization_member (organization_id, member_id) WHERE ended_on IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_member_sector_primary ON core.member_sector (member_id) WHERE is_primary IS TRUE;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_member_geography_primary ON core.member_geography (member_id) WHERE is_primary IS TRUE;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_consent_policy_purpose_version_locale ON consent.consent_policy (purpose_code, version, locale);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_event_matching_policy_version ON event.event_matching_policy (event_id, policy_version);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_event_matching_policy_active ON event.event_matching_policy (event_id) WHERE status = 'ACTIVE';
+CREATE UNIQUE INDEX IF NOT EXISTS ux_event_registration_event_member ON event.event_registration (event_id, member_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_live_mode_session_active ON event.live_mode_session (event_id, member_id) WHERE status = 'ACTIVE';
+CREATE UNIQUE INDEX IF NOT EXISTS ux_connection_request_open_pair ON social.connection_request (sender_member_id, recipient_member_id) WHERE status = 'PENDING';
+CREATE UNIQUE INDEX IF NOT EXISTS ux_connection_pair ON social.connection (member_low_id, member_high_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_connection_accepted_request ON social.connection (accepted_request_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_member_block_active ON social.member_block (blocker_member_id, blocked_member_id) WHERE removed_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_conversation_connection ON chat.conversation (connection_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_message_conversation_message ON chat.message (conversation_id, message_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_notification_policy_version ON notification.notification_policy (community_id, purpose_code, channel, policy_version) NULLS NOT DISTINCT;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_notification_policy_active ON notification.notification_policy (community_id, purpose_code, channel) NULLS NOT DISTINCT WHERE status = 'ACTIVE';
+CREATE UNIQUE INDEX IF NOT EXISTS ux_push_token_fingerprint ON notification.push_token (token_fingerprint);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_notification_dedupe ON notification.notification (member_id, channel, dedupe_key, dedupe_bucket_start);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_notification_attempt_number ON notification.notification_delivery_attempt (notification_id, attempt_number);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nlp_embedding_hash_model ON nlp.nlp_embedding (intent_id, normalized_hash, model_version);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nlp_model_version_active ON nlp.nlp_model_version (status) WHERE status = 'ACTIVE';
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nlp_ranking_config_active ON nlp.nlp_ranking_config (active_to) NULLS NOT DISTINCT WHERE active_to IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nlp_processing_job_active ON nlp.nlp_processing_job (intent_id, job_type) WHERE status IN ('PENDING','RUNNING');
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nlp_match_result_request_candidate ON nlp.nlp_match_result (request_id, candidate_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nlp_match_result_request_rank ON nlp.nlp_match_result (request_id, rank);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nlp_feedback_original ON nlp.nlp_feedback (match_result_id, requester_id) WHERE supersedes_feedback_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nlp_feedback_superseded ON nlp.nlp_feedback (supersedes_feedback_id) WHERE supersedes_feedback_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_evaluation_dataset_name_version ON nlp.evaluation_dataset (name, version);
+CREATE INDEX IF NOT EXISTS ix_member_community_status ON iam.member (community_id, status);
+CREATE INDEX IF NOT EXISTS ix_member_profile_discovery ON core.member_profile (profile_status, visibility, updated_at);
+CREATE INDEX IF NOT EXISTS ix_event_community_status_start ON event.event (community_id, status, starts_at);
+CREATE INDEX IF NOT EXISTS ix_event_presence_cell_expiry ON event.event_presence (coarse_cell, expires_at);
+CREATE INDEX IF NOT EXISTS ix_connection_request_recipient_status_expiry ON social.connection_request (recipient_member_id, status, expires_at, created_at);
+CREATE INDEX IF NOT EXISTS ix_message_conversation_sequence ON chat.message (conversation_id, server_sequence);
+CREATE INDEX IF NOT EXISTS ix_notification_due ON notification.notification (status, scheduled_at, expires_at);
+CREATE INDEX IF NOT EXISTS ix_notification_rate_limit ON notification.notification (member_id, notification_policy_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_notification_event_limit ON notification.notification (member_id, event_matching_policy_id, context_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_notification_attempt_retry ON notification.notification_delivery_attempt (status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS ix_nlp_intent_context_type_status_expiry ON nlp.nlp_intent (context_id, intent_type, status, expires_at);
+CREATE INDEX IF NOT EXISTS ix_match_request_requester_created ON nlp.match_request (requester_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_nlp_match_result_candidate_created ON nlp.nlp_match_result (candidate_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_outbox_event_due ON ops.outbox_event (published_at, next_attempt_at);
+CREATE INDEX IF NOT EXISTS ix_background_job_due ON ops.background_job (status, available_at);
+CREATE INDEX IF NOT EXISTS ix_idempotency_record_expiry ON ops.idempotency_record (expires_at);
+CREATE INDEX IF NOT EXISTS ix_product_event_name_occurred ON analytics.product_event (event_name, occurred_at);
+CREATE INDEX IF NOT EXISTS ix_member_role_granted_by ON iam.member_role (granted_by);
+CREATE INDEX IF NOT EXISTS ix_member_verification_evidence_file_asset_id ON core.member_verification (evidence_file_asset_id);
+CREATE INDEX IF NOT EXISTS ix_member_verification_reviewed_by ON core.member_verification (reviewed_by);
+CREATE INDEX IF NOT EXISTS ix_privacy_request_result_file_asset_id ON consent.privacy_request (result_file_asset_id);
+CREATE INDEX IF NOT EXISTS ix_live_mode_session_consent_record_id ON event.live_mode_session (consent_record_id);
+CREATE INDEX IF NOT EXISTS ix_connection_request_match_result_id ON social.connection_request (match_result_id);
+CREATE INDEX IF NOT EXISTS ix_member_report_reporter_member_id ON social.member_report (reporter_member_id);
+CREATE INDEX IF NOT EXISTS ix_conversation_participant_last_read_message_id ON chat.conversation_participant (last_read_message_id);
+CREATE INDEX IF NOT EXISTS ix_notification_notification_policy_id ON notification.notification (notification_policy_id);
+CREATE INDEX IF NOT EXISTS ix_notification_event_matching_policy_id ON notification.notification (event_matching_policy_id);
+CREATE INDEX IF NOT EXISTS ix_notification_delivery_attempt_push_token_id ON notification.notification_delivery_attempt (push_token_id);
+CREATE INDEX IF NOT EXISTS ix_nlp_embedding_model_version ON nlp.nlp_embedding (model_version);
+CREATE INDEX IF NOT EXISTS ix_match_request_intent_id ON nlp.match_request (intent_id);
+CREATE INDEX IF NOT EXISTS ix_match_request_model_version ON nlp.match_request (model_version);
+CREATE INDEX IF NOT EXISTS ix_match_request_ranking_version ON nlp.match_request (ranking_version);
+CREATE INDEX IF NOT EXISTS ix_nlp_match_result_requester_id ON nlp.nlp_match_result (requester_id);
+CREATE INDEX IF NOT EXISTS ix_nlp_match_result_model_version ON nlp.nlp_match_result (model_version);
+CREATE INDEX IF NOT EXISTS ix_nlp_match_result_ranking_version ON nlp.nlp_match_result (ranking_version);
+CREATE INDEX IF NOT EXISTS ix_nlp_feedback_request_id ON nlp.nlp_feedback (request_id);
+CREATE INDEX IF NOT EXISTS ix_nlp_feedback_requester_id ON nlp.nlp_feedback (requester_id);
+CREATE INDEX IF NOT EXISTS ix_nlp_feedback_candidate_id ON nlp.nlp_feedback (candidate_id);
+CREATE INDEX IF NOT EXISTS ix_match_suppression_created_by ON nlp.match_suppression (created_by);
+CREATE INDEX IF NOT EXISTS ix_evaluation_dataset_approved_by ON nlp.evaluation_dataset (approved_by);
+CREATE INDEX IF NOT EXISTS ix_evaluation_run_ranking_version ON nlp.evaluation_run (ranking_version);
+CREATE INDEX IF NOT EXISTS ix_moderation_case_assigned_to ON moderation.moderation_case (assigned_to);
+CREATE INDEX IF NOT EXISTS ix_content_rule_created_by ON moderation.content_rule (created_by);
 -- v2.3 cross-domain foreign keys.
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RolePermission_role_code' AND parent_object_id = OBJECT_ID(N'[iam].[RolePermission]'))
-    ALTER TABLE [iam].[RolePermission] WITH CHECK ADD CONSTRAINT [FK_RolePermission_role_code] FOREIGN KEY ([role_code]) REFERENCES [iam].[Role] ([role_code]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RolePermission_permission_code' AND parent_object_id = OBJECT_ID(N'[iam].[RolePermission]'))
-    ALTER TABLE [iam].[RolePermission] WITH CHECK ADD CONSTRAINT [FK_RolePermission_permission_code] FOREIGN KEY ([permission_code]) REFERENCES [iam].[Permission] ([permission_code]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RolePermission_granted_by' AND parent_object_id = OBJECT_ID(N'[iam].[RolePermission]'))
-    ALTER TABLE [iam].[RolePermission] WITH CHECK ADD CONSTRAINT [FK_RolePermission_granted_by] FOREIGN KEY ([granted_by]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_AuthSession_member_id' AND parent_object_id = OBJECT_ID(N'[iam].[AuthSession]'))
-    ALTER TABLE [iam].[AuthSession] WITH CHECK ADD CONSTRAINT [FK_AuthSession_member_id] FOREIGN KEY ([member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_AuthSession_device_id' AND parent_object_id = OBJECT_ID(N'[iam].[AuthSession]'))
-    ALTER TABLE [iam].[AuthSession] WITH CHECK ADD CONSTRAINT [FK_AuthSession_device_id] FOREIGN KEY ([device_id]) REFERENCES [iam].[MemberDevice] ([device_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_PrivacyRequestTask_privacy_request_id' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]'))
-    ALTER TABLE [consent].[PrivacyRequestTask] WITH CHECK ADD CONSTRAINT [FK_PrivacyRequestTask_privacy_request_id] FOREIGN KEY ([privacy_request_id]) REFERENCES [consent].[PrivacyRequest] ([privacy_request_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_FileAsset_community_id' AND parent_object_id = OBJECT_ID(N'[storage].[FileAsset]'))
-    ALTER TABLE [storage].[FileAsset] WITH CHECK ADD CONSTRAINT [FK_FileAsset_community_id] FOREIGN KEY ([community_id]) REFERENCES [core].[Community] ([community_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_FileAsset_owner_member_id' AND parent_object_id = OBJECT_ID(N'[storage].[FileAsset]'))
-    ALTER TABLE [storage].[FileAsset] WITH CHECK ADD CONSTRAINT [FK_FileAsset_owner_member_id] FOREIGN KEY ([owner_member_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_FileAssetLink_file_asset_id' AND parent_object_id = OBJECT_ID(N'[storage].[FileAssetLink]'))
-    ALTER TABLE [storage].[FileAssetLink] WITH CHECK ADD CONSTRAINT [FK_FileAssetLink_file_asset_id] FOREIGN KEY ([file_asset_id]) REFERENCES [storage].[FileAsset] ([file_asset_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_FileAssetLink_linked_by' AND parent_object_id = OBJECT_ID(N'[storage].[FileAssetLink]'))
-    ALTER TABLE [storage].[FileAssetLink] WITH CHECK ADD CONSTRAINT [FK_FileAssetLink_linked_by] FOREIGN KEY ([linked_by]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_SyncChange_community_id' AND parent_object_id = OBJECT_ID(N'[ops].[SyncChange]'))
-    ALTER TABLE [ops].[SyncChange] WITH CHECK ADD CONSTRAINT [FK_SyncChange_community_id] FOREIGN KEY ([community_id]) REFERENCES [core].[Community] ([community_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_SyncChange_member_scope_id' AND parent_object_id = OBJECT_ID(N'[ops].[SyncChange]'))
-    ALTER TABLE [ops].[SyncChange] WITH CHECK ADD CONSTRAINT [FK_SyncChange_member_scope_id] FOREIGN KEY ([member_scope_id]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RetentionPolicy_approved_by' AND parent_object_id = OBJECT_ID(N'[ops].[RetentionPolicy]'))
-    ALTER TABLE [ops].[RetentionPolicy] WITH CHECK ADD CONSTRAINT [FK_RetentionPolicy_approved_by] FOREIGN KEY ([approved_by]) REFERENCES [iam].[Member] ([member_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RetentionExecution_retention_policy_id' AND parent_object_id = OBJECT_ID(N'[ops].[RetentionExecution]'))
-    ALTER TABLE [ops].[RetentionExecution] WITH CHECK ADD CONSTRAINT [FK_RetentionExecution_retention_policy_id] FOREIGN KEY ([retention_policy_id]) REFERENCES [ops].[RetentionPolicy] ([retention_policy_id]);
-GO
-
+SELECT ops.add_constraint_if_missing('iam', 'role_permission', 'fk_role_permission_role_code', $constraint$FOREIGN KEY (role_code) REFERENCES iam.role (role_code)$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'role_permission', 'fk_role_permission_permission_code', $constraint$FOREIGN KEY (permission_code) REFERENCES iam.permission (permission_code)$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'role_permission', 'fk_role_permission_granted_by', $constraint$FOREIGN KEY (granted_by) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'auth_session', 'fk_auth_session_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'auth_session', 'fk_auth_session_device_id', $constraint$FOREIGN KEY (device_id) REFERENCES iam.member_device (device_id)$constraint$);
+SELECT ops.add_constraint_if_missing('consent', 'privacy_request_task', 'fk_privacy_request_task_privacy_request_id', $constraint$FOREIGN KEY (privacy_request_id) REFERENCES consent.privacy_request (privacy_request_id)$constraint$);
+SELECT ops.add_constraint_if_missing('storage', 'file_asset', 'fk_file_asset_community_id', $constraint$FOREIGN KEY (community_id) REFERENCES core.community (community_id)$constraint$);
+SELECT ops.add_constraint_if_missing('storage', 'file_asset', 'fk_file_asset_owner_member_id', $constraint$FOREIGN KEY (owner_member_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('storage', 'file_asset_link', 'fk_file_asset_link_file_asset_id', $constraint$FOREIGN KEY (file_asset_id) REFERENCES storage.file_asset (file_asset_id)$constraint$);
+SELECT ops.add_constraint_if_missing('storage', 'file_asset_link', 'fk_file_asset_link_linked_by', $constraint$FOREIGN KEY (linked_by) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('ops', 'sync_change', 'fk_sync_change_community_id', $constraint$FOREIGN KEY (community_id) REFERENCES core.community (community_id)$constraint$);
+SELECT ops.add_constraint_if_missing('ops', 'sync_change', 'fk_sync_change_member_scope_id', $constraint$FOREIGN KEY (member_scope_id) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('ops', 'retention_policy', 'fk_retention_policy_approved_by', $constraint$FOREIGN KEY (approved_by) REFERENCES iam.member (member_id)$constraint$);
+SELECT ops.add_constraint_if_missing('ops', 'retention_execution', 'fk_retention_execution_retention_policy_id', $constraint$FOREIGN KEY (retention_policy_id) REFERENCES ops.retention_policy (retention_policy_id)$constraint$);
 -- v2.3 state, lifecycle and bounded-value constraints.
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Permission_action' AND parent_object_id = OBJECT_ID(N'[iam].[Permission]'))
-    ALTER TABLE [iam].[Permission] WITH CHECK ADD CONSTRAINT [CK_Permission_action] CHECK ([action] IN ('READ','CREATE','UPDATE','DELETE','APPROVE','EXPORT','CONFIGURE'));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Permission_status' AND parent_object_id = OBJECT_ID(N'[iam].[Permission]'))
-    ALTER TABLE [iam].[Permission] WITH CHECK ADD CONSTRAINT [CK_Permission_status] CHECK ([status] IN ('ACTIVE','RETIRED'));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_RolePermission_dates' AND parent_object_id = OBJECT_ID(N'[iam].[RolePermission]'))
-    ALTER TABLE [iam].[RolePermission] WITH CHECK ADD CONSTRAINT [CK_RolePermission_dates] CHECK ([revoked_at] IS NULL OR [revoked_at] >= [granted_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_AuthSession_auth_strength' AND parent_object_id = OBJECT_ID(N'[iam].[AuthSession]'))
-    ALTER TABLE [iam].[AuthSession] WITH CHECK ADD CONSTRAINT [CK_AuthSession_auth_strength] CHECK ([auth_strength] IN ('STANDARD','MFA','STEP_UP'));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_AuthSession_dates' AND parent_object_id = OBJECT_ID(N'[iam].[AuthSession]'))
-    ALTER TABLE [iam].[AuthSession] WITH CHECK ADD CONSTRAINT [CK_AuthSession_dates] CHECK ([expires_at] > [issued_at] AND [last_seen_at] >= [issued_at] AND ([revoked_at] IS NULL OR [revoked_at] >= [issued_at]));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_PrivacyRequestTask_domain' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]'))
-    ALTER TABLE [consent].[PrivacyRequestTask] WITH CHECK ADD CONSTRAINT [CK_PrivacyRequestTask_domain] CHECK ([domain_code] IN ('IAM','PROFILE','EVENT','SOCIAL','CHAT','STORAGE','NLP','ANALYTICS','AUDIT'));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_PrivacyRequestTask_action' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]'))
-    ALTER TABLE [consent].[PrivacyRequestTask] WITH CHECK ADD CONSTRAINT [CK_PrivacyRequestTask_action] CHECK ([action_type] IN ('EXPORT','CORRECT','ANONYMIZE','DELETE','RETAIN_EXCEPTION'));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_PrivacyRequestTask_state' AND parent_object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]'))
-    ALTER TABLE [consent].[PrivacyRequestTask] WITH CHECK ADD CONSTRAINT [CK_PrivacyRequestTask_state] CHECK ([status] IN ('PENDING','RUNNING','COMPLETED','FAILED','EXEMPTED') AND [attempt_count] >= 0 AND ([status] NOT IN ('COMPLETED','EXEMPTED') OR ([completed_at] IS NOT NULL AND [evidence_code] IS NOT NULL)));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_FileAsset_purpose' AND parent_object_id = OBJECT_ID(N'[storage].[FileAsset]'))
-    ALTER TABLE [storage].[FileAsset] WITH CHECK ADD CONSTRAINT [CK_FileAsset_purpose] CHECK ([purpose_code] IN ('CHAT_FILE','VERIFICATION_EVIDENCE','PRIVACY_EXPORT','EVALUATION_REPORT'));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_FileAsset_classification' AND parent_object_id = OBJECT_ID(N'[storage].[FileAsset]'))
-    ALTER TABLE [storage].[FileAsset] WITH CHECK ADD CONSTRAINT [CK_FileAsset_classification] CHECK ([classification] IN ('INTERNAL','CONFIDENTIAL','RESTRICTED','HIGHLY_RESTRICTED'));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_FileAsset_lifecycle' AND parent_object_id = OBJECT_ID(N'[storage].[FileAsset]'))
-    ALTER TABLE [storage].[FileAsset] WITH CHECK ADD CONSTRAINT [CK_FileAsset_lifecycle] CHECK ([size_bytes] >= 0 AND [scan_status] IN ('PENDING','CLEAN','REJECTED','ERROR') AND [lifecycle_status] IN ('UPLOADING','AVAILABLE','QUARANTINED','DELETED','EXPIRED') AND ([lifecycle_status] <> 'AVAILABLE' OR [scan_status] = 'CLEAN') AND ([lifecycle_status] NOT IN ('DELETED','EXPIRED') OR [deleted_at] IS NOT NULL));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_FileAssetLink_values' AND parent_object_id = OBJECT_ID(N'[storage].[FileAssetLink]'))
-    ALTER TABLE [storage].[FileAssetLink] WITH CHECK ADD CONSTRAINT [CK_FileAssetLink_values] CHECK ([resource_type] IN ('MESSAGE','MEMBER_VERIFICATION','PRIVACY_REQUEST','EVALUATION_RUN') AND [relationship_type] IN ('PRIMARY','EVIDENCE','RESULT','REPORT'));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_SyncChange_values' AND parent_object_id = OBJECT_ID(N'[ops].[SyncChange]'))
-    ALTER TABLE [ops].[SyncChange] WITH CHECK ADD CONSTRAINT [CK_SyncChange_values] CHECK ([change_type] IN ('UPSERT','DELETE') AND [resource_type] IN ('PROFILE','MATCH','REQUEST','CONVERSATION','MESSAGE','NOTIFICATION') AND [expires_at] > [occurred_at] AND ([payload_json] IS NULL OR ISJSON([payload_json]) = 1));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_RetentionPolicy_values' AND parent_object_id = OBJECT_ID(N'[ops].[RetentionPolicy]'))
-    ALTER TABLE [ops].[RetentionPolicy] WITH CHECK ADD CONSTRAINT [CK_RetentionPolicy_values] CHECK ([policy_version] > 0 AND [retention_days] >= 0 AND [status] IN ('DRAFT','ACTIVE','RETIRED') AND [disposition_action] IN ('DELETE','ANONYMIZE','ARCHIVE') AND ([effective_to] IS NULL OR [effective_to] > [effective_from]));
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_RetentionExecution_values' AND parent_object_id = OBJECT_ID(N'[ops].[RetentionExecution]'))
-    ALTER TABLE [ops].[RetentionExecution] WITH CHECK ADD CONSTRAINT [CK_RetentionExecution_values] CHECK ([scope_end] > [scope_start] AND [status] IN ('RUNNING','SUCCEEDED','PARTIAL','FAILED') AND [examined_count] >= 0 AND [disposed_count] >= 0 AND [skipped_hold_count] >= 0 AND [disposed_count] + [skipped_hold_count] <= [examined_count] AND ([status] = 'RUNNING' OR [completed_at] IS NOT NULL));
-GO
-
+SELECT ops.add_constraint_if_missing('iam', 'permission', 'ck_permission_action', $constraint$CHECK (action IN ('READ','CREATE','UPDATE','DELETE','APPROVE','EXPORT','CONFIGURE'))$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'permission', 'ck_permission_status', $constraint$CHECK (status IN ('ACTIVE','RETIRED'))$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'role_permission', 'ck_role_permission_dates', $constraint$CHECK (revoked_at IS NULL OR revoked_at >= granted_at)$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'auth_session', 'ck_auth_session_auth_strength', $constraint$CHECK (auth_strength IN ('STANDARD','MFA','STEP_UP'))$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'auth_session', 'ck_auth_session_dates', $constraint$CHECK (expires_at > issued_at AND last_seen_at >= issued_at AND (revoked_at IS NULL OR revoked_at >= issued_at))$constraint$);
+SELECT ops.add_constraint_if_missing('consent', 'privacy_request_task', 'ck_privacy_request_task_domain', $constraint$CHECK (domain_code IN ('IAM','PROFILE','EVENT','SOCIAL','CHAT','STORAGE','NLP','ANALYTICS','AUDIT'))$constraint$);
+SELECT ops.add_constraint_if_missing('consent', 'privacy_request_task', 'ck_privacy_request_task_action', $constraint$CHECK (action_type IN ('EXPORT','CORRECT','ANONYMIZE','DELETE','RETAIN_EXCEPTION'))$constraint$);
+SELECT ops.add_constraint_if_missing('consent', 'privacy_request_task', 'ck_privacy_request_task_state', $constraint$CHECK (status IN ('PENDING','RUNNING','COMPLETED','FAILED','EXEMPTED') AND attempt_count >= 0 AND (status NOT IN ('COMPLETED','EXEMPTED') OR (completed_at IS NOT NULL AND evidence_code IS NOT NULL)))$constraint$);
+SELECT ops.add_constraint_if_missing('storage', 'file_asset', 'ck_file_asset_purpose', $constraint$CHECK (purpose_code IN ('CHAT_FILE','VERIFICATION_EVIDENCE','PRIVACY_EXPORT','EVALUATION_REPORT'))$constraint$);
+SELECT ops.add_constraint_if_missing('storage', 'file_asset', 'ck_file_asset_classification', $constraint$CHECK (classification IN ('INTERNAL','CONFIDENTIAL','RESTRICTED','HIGHLY_RESTRICTED'))$constraint$);
+SELECT ops.add_constraint_if_missing('storage', 'file_asset', 'ck_file_asset_lifecycle', $constraint$CHECK (size_bytes >= 0 AND scan_status IN ('PENDING','CLEAN','REJECTED','ERROR') AND lifecycle_status IN ('UPLOADING','AVAILABLE','QUARANTINED','DELETED','EXPIRED') AND (lifecycle_status <> 'AVAILABLE' OR scan_status = 'CLEAN') AND (lifecycle_status NOT IN ('DELETED','EXPIRED') OR deleted_at IS NOT NULL))$constraint$);
+SELECT ops.add_constraint_if_missing('storage', 'file_asset_link', 'ck_file_asset_link_values', $constraint$CHECK (resource_type IN ('MESSAGE','MEMBER_VERIFICATION','PRIVACY_REQUEST','EVALUATION_RUN') AND relationship_type IN ('PRIMARY','EVIDENCE','RESULT','REPORT'))$constraint$);
+SELECT ops.add_constraint_if_missing('ops', 'sync_change', 'ck_sync_change_values', $constraint$CHECK (change_type IN ('UPSERT','DELETE') AND resource_type IN ('PROFILE','MATCH','REQUEST','CONVERSATION','MESSAGE','NOTIFICATION') AND expires_at > occurred_at)$constraint$);
+SELECT ops.add_constraint_if_missing('ops', 'retention_policy', 'ck_retention_policy_values', $constraint$CHECK (policy_version > 0 AND retention_days >= 0 AND status IN ('DRAFT','ACTIVE','RETIRED') AND disposition_action IN ('DELETE','ANONYMIZE','ARCHIVE') AND (effective_to IS NULL OR effective_to > effective_from))$constraint$);
+SELECT ops.add_constraint_if_missing('ops', 'retention_execution', 'ck_retention_execution_values', $constraint$CHECK (scope_end > scope_start AND status IN ('RUNNING','SUCCEEDED','PARTIAL','FAILED') AND examined_count >= 0 AND disposed_count >= 0 AND skipped_hold_count >= 0 AND disposed_count + skipped_hold_count <= examined_count AND (status = 'RUNNING' OR completed_at IS NOT NULL))$constraint$);
 -- v2.3 lookup, uniqueness and worker access paths.
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[Permission]') AND name = N'UX_Permission_ResourceAction')
-    CREATE UNIQUE INDEX [UX_Permission_ResourceAction] ON [iam].[Permission] ([resource_type], [action]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[Permission]') AND name = N'IX_Permission_Status')
-    CREATE INDEX [IX_Permission_Status] ON [iam].[Permission] ([status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[RolePermission]') AND name = N'IX_RolePermission_PermissionRevoked')
-    CREATE INDEX [IX_RolePermission_PermissionRevoked] ON [iam].[RolePermission] ([permission_code], [revoked_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[AuthSession]') AND name = N'UX_AuthSession_ProviderSessionHash')
-    CREATE UNIQUE INDEX [UX_AuthSession_ProviderSessionHash] ON [iam].[AuthSession] ([provider_session_hash]) WHERE [provider_session_hash] IS NOT NULL;
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[AuthSession]') AND name = N'IX_AuthSession_MemberActive')
-    CREATE INDEX [IX_AuthSession_MemberActive] ON [iam].[AuthSession] ([member_id], [revoked_at], [expires_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[AuthSession]') AND name = N'IX_AuthSession_DeviceRevoked')
-    CREATE INDEX [IX_AuthSession_DeviceRevoked] ON [iam].[AuthSession] ([device_id], [revoked_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]') AND name = N'UX_PrivacyRequestTask_DomainAction')
-    CREATE UNIQUE INDEX [UX_PrivacyRequestTask_DomainAction] ON [consent].[PrivacyRequestTask] ([privacy_request_id], [domain_code], [action_type]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequestTask]') AND name = N'IX_PrivacyRequestTask_DueWork')
-    CREATE INDEX [IX_PrivacyRequestTask_DueWork] ON [consent].[PrivacyRequestTask] ([status], [updated_at]);
-GO
--- blob_path is nvarchar(1024), which exceeds Azure SQL's index-key limit.
--- blob_path_hash is the enforceable unique key; the file service verifies the full path on a hash match.
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAsset]') AND name = N'UX_FileAsset_BlobPathHash')
-    CREATE UNIQUE INDEX [UX_FileAsset_BlobPathHash] ON [storage].[FileAsset] ([blob_path_hash]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAsset]') AND name = N'IX_FileAsset_OwnerCreated')
-    CREATE INDEX [IX_FileAsset_OwnerCreated] ON [storage].[FileAsset] ([owner_member_id], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAsset]') AND name = N'IX_FileAsset_LifecycleExpiry')
-    CREATE INDEX [IX_FileAsset_LifecycleExpiry] ON [storage].[FileAsset] ([purpose_code], [lifecycle_status], [expires_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAsset]') AND name = N'IX_FileAsset_ScanQueue')
-    CREATE INDEX [IX_FileAsset_ScanQueue] ON [storage].[FileAsset] ([scan_status], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAssetLink]') AND name = N'UX_FileAssetLink_Resource')
-    CREATE UNIQUE INDEX [UX_FileAssetLink_Resource] ON [storage].[FileAssetLink] ([file_asset_id], [resource_type], [resource_id], [relationship_type]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[storage].[FileAssetLink]') AND name = N'IX_FileAssetLink_Resource')
-    CREATE INDEX [IX_FileAssetLink_Resource] ON [storage].[FileAssetLink] ([resource_type], [resource_id], [removed_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[SyncChange]') AND name = N'IX_SyncChange_CommunityCursor')
-    CREATE INDEX [IX_SyncChange_CommunityCursor] ON [ops].[SyncChange] ([community_id], [sync_sequence]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[SyncChange]') AND name = N'IX_SyncChange_MemberCursor')
-    CREATE INDEX [IX_SyncChange_MemberCursor] ON [ops].[SyncChange] ([member_scope_id], [sync_sequence]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[SyncChange]') AND name = N'IX_SyncChange_Expiry')
-    CREATE INDEX [IX_SyncChange_Expiry] ON [ops].[SyncChange] ([expires_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[RetentionPolicy]') AND name = N'UX_RetentionPolicy_Version')
-    CREATE UNIQUE INDEX [UX_RetentionPolicy_Version] ON [ops].[RetentionPolicy] ([resource_type], [policy_version]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[RetentionPolicy]') AND name = N'UX_RetentionPolicy_Active')
-    CREATE UNIQUE INDEX [UX_RetentionPolicy_Active] ON [ops].[RetentionPolicy] ([resource_type]) WHERE [status] = 'ACTIVE';
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[RetentionPolicy]') AND name = N'IX_RetentionPolicy_StatusEffective')
-    CREATE INDEX [IX_RetentionPolicy_StatusEffective] ON [ops].[RetentionPolicy] ([status], [effective_from]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[RetentionExecution]') AND name = N'IX_RetentionExecution_PolicyStarted')
-    CREATE INDEX [IX_RetentionExecution_PolicyStarted] ON [ops].[RetentionExecution] ([retention_policy_id], [started_at] DESC);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[RetentionExecution]') AND name = N'IX_RetentionExecution_StatusStarted')
-    CREATE INDEX [IX_RetentionExecution_StatusStarted] ON [ops].[RetentionExecution] ([status], [started_at]);
-GO
-
+CREATE UNIQUE INDEX IF NOT EXISTS ux_permission_resource_action ON iam.permission (resource_type, action);
+CREATE INDEX IF NOT EXISTS ix_permission_status ON iam.permission (status);
+CREATE INDEX IF NOT EXISTS ix_role_permission_permission_revoked ON iam.role_permission (permission_code, revoked_at);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_auth_session_provider_session_hash ON iam.auth_session (provider_session_hash) WHERE provider_session_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ix_auth_session_member_active ON iam.auth_session (member_id, revoked_at, expires_at);
+CREATE INDEX IF NOT EXISTS ix_auth_session_device_revoked ON iam.auth_session (device_id, revoked_at);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_privacy_request_task_domain_action ON consent.privacy_request_task (privacy_request_id, domain_code, action_type);
+CREATE INDEX IF NOT EXISTS ix_privacy_request_task_due_work ON consent.privacy_request_task (status, updated_at);
+-- Long blob paths can exceed PostgreSQL B-tree entry limits; the hash is unique and full paths are collision-checked by the service.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_file_asset_blob_path_hash ON storage.file_asset (blob_path_hash);
+CREATE INDEX IF NOT EXISTS ix_file_asset_owner_created ON storage.file_asset (owner_member_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_file_asset_lifecycle_expiry ON storage.file_asset (purpose_code, lifecycle_status, expires_at);
+CREATE INDEX IF NOT EXISTS ix_file_asset_scan_queue ON storage.file_asset (scan_status, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_file_asset_link_resource ON storage.file_asset_link (file_asset_id, resource_type, resource_id, relationship_type);
+CREATE INDEX IF NOT EXISTS ix_file_asset_link_resource ON storage.file_asset_link (resource_type, resource_id, removed_at);
+CREATE INDEX IF NOT EXISTS ix_sync_change_community_cursor ON ops.sync_change (community_id, sync_sequence);
+CREATE INDEX IF NOT EXISTS ix_sync_change_member_cursor ON ops.sync_change (member_scope_id, sync_sequence);
+CREATE INDEX IF NOT EXISTS ix_sync_change_expiry ON ops.sync_change (expires_at);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_retention_policy_version ON ops.retention_policy (resource_type, policy_version);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_retention_policy_active ON ops.retention_policy (resource_type) WHERE status = 'ACTIVE';
+CREATE INDEX IF NOT EXISTS ix_retention_policy_status_effective ON ops.retention_policy (status, effective_from);
+CREATE INDEX IF NOT EXISTS ix_retention_execution_policy_started ON ops.retention_execution (retention_policy_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS ix_retention_execution_status_started ON ops.retention_execution (status, started_at);
 -- Documented v2.3 access paths not already covered by a matching key.
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[Community]') AND name = N'IX_Community_Status')
-    CREATE INDEX [IX_Community_Status] ON [core].[Community] ([status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[Organization]') AND name = N'IX_Organization_WebsiteDomain')
-    CREATE INDEX [IX_Organization_WebsiteDomain] ON [core].[Organization] ([website_domain]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[OrganizationMember]') AND name = N'UQ_OrganizationMember_OrganizationIdMemberIdStartedOn')
-    CREATE UNIQUE INDEX [UQ_OrganizationMember_OrganizationIdMemberIdStartedOn] ON [core].[OrganizationMember] ([organization_id], [member_id], [started_on]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[OrganizationMember]') AND name = N'IX_OrganizationMember_MemberIdIsPrimary')
-    CREATE INDEX [IX_OrganizationMember_MemberIdIsPrimary] ON [core].[OrganizationMember] ([member_id], [is_primary]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberProfile]') AND name = N'IX_MemberProfile_UpdatedAt')
-    CREATE INDEX [IX_MemberProfile_UpdatedAt] ON [core].[MemberProfile] ([updated_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[Sector]') AND name = N'UQ_Sector_Name')
-    CREATE UNIQUE INDEX [UQ_Sector_Name] ON [core].[Sector] ([name]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[Sector]') AND name = N'IX_Sector_ParentSectorCodeStatus')
-    CREATE INDEX [IX_Sector_ParentSectorCodeStatus] ON [core].[Sector] ([parent_sector_code], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberSector]') AND name = N'IX_MemberSector_SectorCodeMemberId')
-    CREATE INDEX [IX_MemberSector_SectorCodeMemberId] ON [core].[MemberSector] ([sector_code], [member_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberGeography]') AND name = N'IX_MemberGeography_MemberIdIsPrimary')
-    CREATE INDEX [IX_MemberGeography_MemberIdIsPrimary] ON [core].[MemberGeography] ([member_id], [is_primary]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberGeography]') AND name = N'IX_MemberGeography_CountryCodeRegionCity')
-    CREATE INDEX [IX_MemberGeography_CountryCodeRegionCity] ON [core].[MemberGeography] ([country_code], [region], [city]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[ProfileFieldVisibility]') AND name = N'IX_ProfileFieldVisibility_Audience')
-    CREATE INDEX [IX_ProfileFieldVisibility_Audience] ON [core].[ProfileFieldVisibility] ([audience]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberVerification]') AND name = N'IX_MemberVerification_MemberIdStatus')
-    CREATE INDEX [IX_MemberVerification_MemberIdStatus] ON [core].[MemberVerification] ([member_id], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[core].[MemberVerification]') AND name = N'IX_MemberVerification_StatusCreatedAt')
-    CREATE INDEX [IX_MemberVerification_StatusCreatedAt] ON [core].[MemberVerification] ([status], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[Member]') AND name = N'IX_Member_StatusUpdatedAt')
-    CREATE INDEX [IX_Member_StatusUpdatedAt] ON [iam].[Member] ([status], [updated_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberIdentity]') AND name = N'IX_MemberIdentity_MemberIdIsPrimary')
-    CREATE INDEX [IX_MemberIdentity_MemberIdIsPrimary] ON [iam].[MemberIdentity] ([member_id], [is_primary]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberRole]') AND name = N'IX_MemberRole_RoleCodeExpiresAt')
-    CREATE INDEX [IX_MemberRole_RoleCodeExpiresAt] ON [iam].[MemberRole] ([role_code], [expires_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberDevice]') AND name = N'IX_MemberDevice_MemberIdStatus')
-    CREATE INDEX [IX_MemberDevice_MemberIdStatus] ON [iam].[MemberDevice] ([member_id], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[iam].[MemberDevice]') AND name = N'IX_MemberDevice_LastSeenAt')
-    CREATE INDEX [IX_MemberDevice_LastSeenAt] ON [iam].[MemberDevice] ([last_seen_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[ConsentPolicy]') AND name = N'IX_ConsentPolicy_PurposeCodeEffectiveFrom')
-    CREATE INDEX [IX_ConsentPolicy_PurposeCodeEffectiveFrom] ON [consent].[ConsentPolicy] ([purpose_code], [effective_from]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[MemberConsent]') AND name = N'IX_MemberConsent_MemberIdPolicyIdCapturedAt')
-    CREATE INDEX [IX_MemberConsent_MemberIdPolicyIdCapturedAt] ON [consent].[MemberConsent] ([member_id], [policy_id], [captured_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[MemberConsent]') AND name = N'IX_MemberConsent_PolicyIdDecision')
-    CREATE INDEX [IX_MemberConsent_PolicyIdDecision] ON [consent].[MemberConsent] ([policy_id], [decision]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequest]') AND name = N'IX_PrivacyRequest_StatusDueAt')
-    CREATE INDEX [IX_PrivacyRequest_StatusDueAt] ON [consent].[PrivacyRequest] ([status], [due_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[consent].[PrivacyRequest]') AND name = N'IX_PrivacyRequest_MemberIdCreatedAt')
-    CREATE INDEX [IX_PrivacyRequest_MemberIdCreatedAt] ON [consent].[PrivacyRequest] ([member_id], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[Venue]') AND name = N'IX_Venue_CountryCodeRegionCity')
-    CREATE INDEX [IX_Venue_CountryCodeRegionCity] ON [event].[Venue] ([country_code], [region], [city]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[Event]') AND name = N'IX_Event_VenueIdStartsAt')
-    CREATE INDEX [IX_Event_VenueIdStartsAt] ON [event].[Event] ([venue_id], [starts_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventMatchingPolicy]') AND name = N'IX_EventMatchingPolicy_StatusEffectiveFromEffectiveTo')
-    CREATE INDEX [IX_EventMatchingPolicy_StatusEffectiveFromEffectiveTo] ON [event].[EventMatchingPolicy] ([status], [effective_from], [effective_to]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventRegistration]') AND name = N'IX_EventRegistration_MemberIdStatus')
-    CREATE INDEX [IX_EventRegistration_MemberIdStatus] ON [event].[EventRegistration] ([member_id], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventRegistration]') AND name = N'IX_EventRegistration_EventIdStatus')
-    CREATE INDEX [IX_EventRegistration_EventIdStatus] ON [event].[EventRegistration] ([event_id], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[LiveModeSession]') AND name = N'IX_LiveModeSession_EventIdStatusActiveUntil')
-    CREATE INDEX [IX_LiveModeSession_EventIdStatusActiveUntil] ON [event].[LiveModeSession] ([event_id], [status], [active_until]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[LiveModeSession]') AND name = N'IX_LiveModeSession_MemberIdStatus')
-    CREATE INDEX [IX_LiveModeSession_MemberIdStatus] ON [event].[LiveModeSession] ([member_id], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[event].[EventPresence]') AND name = N'IX_EventPresence_LiveSessionIdObservedAt')
-    CREATE INDEX [IX_EventPresence_LiveSessionIdObservedAt] ON [event].[EventPresence] ([live_session_id], [observed_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[ConnectionRequest]') AND name = N'IX_ConnectionRequest_SenderMemberIdStatus')
-    CREATE INDEX [IX_ConnectionRequest_SenderMemberIdStatus] ON [social].[ConnectionRequest] ([sender_member_id], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[Connection]') AND name = N'IX_Connection_MemberLowIdStatus')
-    CREATE INDEX [IX_Connection_MemberLowIdStatus] ON [social].[Connection] ([member_low_id], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[Connection]') AND name = N'IX_Connection_MemberHighIdStatus')
-    CREATE INDEX [IX_Connection_MemberHighIdStatus] ON [social].[Connection] ([member_high_id], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[MemberBlock]') AND name = N'IX_MemberBlock_BlockedMemberIdRemovedAt')
-    CREATE INDEX [IX_MemberBlock_BlockedMemberIdRemovedAt] ON [social].[MemberBlock] ([blocked_member_id], [removed_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[MemberReport]') AND name = N'IX_MemberReport_StatusCreatedAt')
-    CREATE INDEX [IX_MemberReport_StatusCreatedAt] ON [social].[MemberReport] ([status], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[social].[MemberReport]') AND name = N'IX_MemberReport_ReportedMemberIdCreatedAt')
-    CREATE INDEX [IX_MemberReport_ReportedMemberIdCreatedAt] ON [social].[MemberReport] ([reported_member_id], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Conversation]') AND name = N'IX_Conversation_StatusLastMessageAt')
-    CREATE INDEX [IX_Conversation_StatusLastMessageAt] ON [chat].[Conversation] ([status], [last_message_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[ConversationParticipant]') AND name = N'IX_ConversationParticipant_MemberIdLeftAt')
-    CREATE INDEX [IX_ConversationParticipant_MemberIdLeftAt] ON [chat].[ConversationParticipant] ([member_id], [left_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[Message]') AND name = N'IX_Message_SenderMemberIdCreatedAt')
-    CREATE INDEX [IX_Message_SenderMemberIdCreatedAt] ON [chat].[Message] ([sender_member_id], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[chat].[MessageReceipt]') AND name = N'IX_MessageReceipt_MemberIdReadAt')
-    CREATE INDEX [IX_MessageReceipt_MemberIdReadAt] ON [chat].[MessageReceipt] ([member_id], [read_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[NotificationPolicy]') AND name = N'IX_NotificationPolicy_StatusEffectiveFromEffectiveTo')
-    CREATE INDEX [IX_NotificationPolicy_StatusEffectiveFromEffectiveTo] ON [notification].[NotificationPolicy] ([status], [effective_from], [effective_to]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[PushToken]') AND name = N'IX_PushToken_DeviceIdStatus')
-    CREATE INDEX [IX_PushToken_DeviceIdStatus] ON [notification].[PushToken] ([device_id], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[Notification]') AND name = N'IX_Notification_MemberIdCreatedAt')
-    CREATE INDEX [IX_Notification_MemberIdCreatedAt] ON [notification].[Notification] ([member_id], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[notification].[NotificationDeliveryAttempt]') AND name = N'IX_NotificationDeliveryAttempt_ProviderProviderMessageId')
-    CREATE INDEX [IX_NotificationDeliveryAttempt_ProviderProviderMessageId] ON [notification].[NotificationDeliveryAttempt] ([provider], [provider_message_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpIntent]') AND name = N'IX_NlpIntent_MemberIdStatus')
-    CREATE INDEX [IX_NlpIntent_MemberIdStatus] ON [nlp].[NlpIntent] ([member_id], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpIntent]') AND name = N'IX_NlpIntent_NormalizedHash')
-    CREATE INDEX [IX_NlpIntent_NormalizedHash] ON [nlp].[NlpIntent] ([normalized_hash]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpModelVersion]') AND name = N'IX_NlpModelVersion_StatusCreatedAt')
-    CREATE INDEX [IX_NlpModelVersion_StatusCreatedAt] ON [nlp].[NlpModelVersion] ([status], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpRankingConfig]') AND name = N'IX_NlpRankingConfig_ActiveFromActiveTo')
-    CREATE INDEX [IX_NlpRankingConfig_ActiveFromActiveTo] ON [nlp].[NlpRankingConfig] ([active_from], [active_to]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpProcessingJob]') AND name = N'IX_NlpProcessingJob_StatusAvailableAt')
-    CREATE INDEX [IX_NlpProcessingJob_StatusAvailableAt] ON [nlp].[NlpProcessingJob] ([status], [available_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchRequest]') AND name = N'IX_MatchRequest_StatusCreatedAt')
-    CREATE INDEX [IX_MatchRequest_StatusCreatedAt] ON [nlp].[MatchRequest] ([status], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchRequest]') AND name = N'IX_MatchRequest_RequestHash')
-    CREATE INDEX [IX_MatchRequest_RequestHash] ON [nlp].[MatchRequest] ([request_hash]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[NlpFeedback]') AND name = N'IX_NlpFeedback_LabelCreatedAt')
-    CREATE INDEX [IX_NlpFeedback_LabelCreatedAt] ON [nlp].[NlpFeedback] ([label], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchSuppression]') AND name = N'IX_MatchSuppression_MemberIdContextIdEndsAt')
-    CREATE INDEX [IX_MatchSuppression_MemberIdContextIdEndsAt] ON [nlp].[MatchSuppression] ([member_id], [context_id], [ends_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[MatchSuppression]') AND name = N'IX_MatchSuppression_IntentIdEndsAt')
-    CREATE INDEX [IX_MatchSuppression_IntentIdEndsAt] ON [nlp].[MatchSuppression] ([intent_id], [ends_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationDataset]') AND name = N'IX_EvaluationDataset_StatusCreatedAt')
-    CREATE INDEX [IX_EvaluationDataset_StatusCreatedAt] ON [nlp].[EvaluationDataset] ([status], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationPair]') AND name = N'IX_EvaluationPair_DatasetIdSplit')
-    CREATE INDEX [IX_EvaluationPair_DatasetIdSplit] ON [nlp].[EvaluationPair] ([dataset_id], [split]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationPair]') AND name = N'IX_EvaluationPair_GoldLabel')
-    CREATE INDEX [IX_EvaluationPair_GoldLabel] ON [nlp].[EvaluationPair] ([gold_label]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationRun]') AND name = N'IX_EvaluationRun_DatasetIdStartedAt')
-    CREATE INDEX [IX_EvaluationRun_DatasetIdStartedAt] ON [nlp].[EvaluationRun] ([dataset_id], [started_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[nlp].[EvaluationRun]') AND name = N'IX_EvaluationRun_ModelVersionRankingVersion')
-    CREATE INDEX [IX_EvaluationRun_ModelVersionRankingVersion] ON [nlp].[EvaluationRun] ([model_version], [ranking_version]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationCase]') AND name = N'IX_ModerationCase_StatusPriorityCreatedAt')
-    CREATE INDEX [IX_ModerationCase_StatusPriorityCreatedAt] ON [moderation].[ModerationCase] ([status], [priority], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationCase]') AND name = N'IX_ModerationCase_SubjectMemberIdCreatedAt')
-    CREATE INDEX [IX_ModerationCase_SubjectMemberIdCreatedAt] ON [moderation].[ModerationCase] ([subject_member_id], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationAction]') AND name = N'IX_ModerationAction_ModerationCaseIdCreatedAt')
-    CREATE INDEX [IX_ModerationAction_ModerationCaseIdCreatedAt] ON [moderation].[ModerationAction] ([moderation_case_id], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ModerationAction]') AND name = N'IX_ModerationAction_ActorMemberIdCreatedAt')
-    CREATE INDEX [IX_ModerationAction_ActorMemberIdCreatedAt] ON [moderation].[ModerationAction] ([actor_member_id], [created_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ContentRule]') AND name = N'UQ_ContentRule_RuleTypeVersion')
-    CREATE UNIQUE INDEX [UQ_ContentRule_RuleTypeVersion] ON [moderation].[ContentRule] ([rule_type], [version]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ContentRule]') AND name = N'IX_ContentRule_RuleTypeStatus')
-    CREATE INDEX [IX_ContentRule_RuleTypeStatus] ON [moderation].[ContentRule] ([rule_type], [status]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ContentScan]') AND name = N'IX_ContentScan_ResourceTypeResourceIdScannedAt')
-    CREATE INDEX [IX_ContentScan_ResourceTypeResourceIdScannedAt] ON [moderation].[ContentScan] ([resource_type], [resource_id], [scanned_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[moderation].[ContentScan]') AND name = N'IX_ContentScan_ResultScannedAt')
-    CREATE INDEX [IX_ContentScan_ResultScannedAt] ON [moderation].[ContentScan] ([result], [scanned_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[OutboxEvent]') AND name = N'IX_OutboxEvent_AggregateTypeAggregateIdOccurredAt')
-    CREATE INDEX [IX_OutboxEvent_AggregateTypeAggregateIdOccurredAt] ON [ops].[OutboxEvent] ([aggregate_type], [aggregate_id], [occurred_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[BackgroundJob]') AND name = N'IX_BackgroundJob_ResourceTypeResourceId')
-    CREATE INDEX [IX_BackgroundJob_ResourceTypeResourceId] ON [ops].[BackgroundJob] ([resource_type], [resource_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[AuditEvent]') AND name = N'IX_AuditEvent_ResourceTypeResourceIdOccurredAt')
-    CREATE INDEX [IX_AuditEvent_ResourceTypeResourceIdOccurredAt] ON [ops].[AuditEvent] ([resource_type], [resource_id], [occurred_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[AuditEvent]') AND name = N'IX_AuditEvent_ActorIdOccurredAt')
-    CREATE INDEX [IX_AuditEvent_ActorIdOccurredAt] ON [ops].[AuditEvent] ([actor_id], [occurred_at]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[ops].[AuditEvent]') AND name = N'IX_AuditEvent_CorrelationId')
-    CREATE INDEX [IX_AuditEvent_CorrelationId] ON [ops].[AuditEvent] ([correlation_id]);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[analytics].[ProductEvent]') AND name = N'IX_ProductEvent_CommunityIdOccurredAt')
-    CREATE INDEX [IX_ProductEvent_CommunityIdOccurredAt] ON [analytics].[ProductEvent] ([community_id], [occurred_at]);
-GO
+CREATE INDEX IF NOT EXISTS ix_community_status ON core.community (status);
+CREATE INDEX IF NOT EXISTS ix_organization_website_domain ON core.organization (website_domain);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_organization_member_organization_id_member_id_started_on ON core.organization_member (organization_id, member_id, started_on);
+CREATE INDEX IF NOT EXISTS ix_organization_member_member_id_is_primary ON core.organization_member (member_id, is_primary);
+CREATE INDEX IF NOT EXISTS ix_member_profile_updated_at ON core.member_profile (updated_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sector_name ON core.sector (name);
+CREATE INDEX IF NOT EXISTS ix_sector_parent_sector_code_status ON core.sector (parent_sector_code, status);
+CREATE INDEX IF NOT EXISTS ix_member_sector_sector_code_member_id ON core.member_sector (sector_code, member_id);
+CREATE INDEX IF NOT EXISTS ix_member_geography_member_id_is_primary ON core.member_geography (member_id, is_primary);
+CREATE INDEX IF NOT EXISTS ix_member_geography_country_code_region_city ON core.member_geography (country_code, region, city);
+CREATE INDEX IF NOT EXISTS ix_profile_field_visibility_audience ON core.profile_field_visibility (audience);
+CREATE INDEX IF NOT EXISTS ix_member_verification_member_id_status ON core.member_verification (member_id, status);
+CREATE INDEX IF NOT EXISTS ix_member_verification_status_created_at ON core.member_verification (status, created_at);
+CREATE INDEX IF NOT EXISTS ix_member_status_updated_at ON iam.member (status, updated_at);
+CREATE INDEX IF NOT EXISTS ix_member_identity_member_id_is_primary ON iam.member_identity (member_id, is_primary);
+CREATE INDEX IF NOT EXISTS ix_member_role_role_code_expires_at ON iam.member_role (role_code, expires_at);
+CREATE INDEX IF NOT EXISTS ix_member_device_member_id_status ON iam.member_device (member_id, status);
+CREATE INDEX IF NOT EXISTS ix_member_device_last_seen_at ON iam.member_device (last_seen_at);
+CREATE INDEX IF NOT EXISTS ix_consent_policy_purpose_code_effective_from ON consent.consent_policy (purpose_code, effective_from);
+CREATE INDEX IF NOT EXISTS ix_member_consent_member_id_policy_id_captured_at ON consent.member_consent (member_id, policy_id, captured_at);
+CREATE INDEX IF NOT EXISTS ix_member_consent_policy_id_decision ON consent.member_consent (policy_id, decision);
+CREATE INDEX IF NOT EXISTS ix_privacy_request_status_due_at ON consent.privacy_request (status, due_at);
+CREATE INDEX IF NOT EXISTS ix_privacy_request_member_id_created_at ON consent.privacy_request (member_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_venue_country_code_region_city ON event.venue (country_code, region, city);
+CREATE INDEX IF NOT EXISTS ix_event_venue_id_starts_at ON event.event (venue_id, starts_at);
+CREATE INDEX IF NOT EXISTS ix_event_matching_policy_status_effective_from_effective_to ON event.event_matching_policy (status, effective_from, effective_to);
+CREATE INDEX IF NOT EXISTS ix_event_registration_member_id_status ON event.event_registration (member_id, status);
+CREATE INDEX IF NOT EXISTS ix_event_registration_event_id_status ON event.event_registration (event_id, status);
+CREATE INDEX IF NOT EXISTS ix_live_mode_session_event_id_status_active_until ON event.live_mode_session (event_id, status, active_until);
+CREATE INDEX IF NOT EXISTS ix_live_mode_session_member_id_status ON event.live_mode_session (member_id, status);
+CREATE INDEX IF NOT EXISTS ix_event_presence_live_session_id_observed_at ON event.event_presence (live_session_id, observed_at);
+CREATE INDEX IF NOT EXISTS ix_connection_request_sender_member_id_status ON social.connection_request (sender_member_id, status);
+CREATE INDEX IF NOT EXISTS ix_connection_member_low_id_status ON social.connection (member_low_id, status);
+CREATE INDEX IF NOT EXISTS ix_connection_member_high_id_status ON social.connection (member_high_id, status);
+CREATE INDEX IF NOT EXISTS ix_member_block_blocked_member_id_removed_at ON social.member_block (blocked_member_id, removed_at);
+CREATE INDEX IF NOT EXISTS ix_member_report_status_created_at ON social.member_report (status, created_at);
+CREATE INDEX IF NOT EXISTS ix_member_report_reported_member_id_created_at ON social.member_report (reported_member_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_conversation_status_last_message_at ON chat.conversation (status, last_message_at);
+CREATE INDEX IF NOT EXISTS ix_conversation_participant_member_id_left_at ON chat.conversation_participant (member_id, left_at);
+CREATE INDEX IF NOT EXISTS ix_message_sender_member_id_created_at ON chat.message (sender_member_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_message_receipt_member_id_read_at ON chat.message_receipt (member_id, read_at);
+CREATE INDEX IF NOT EXISTS ix_notification_policy_status_effective_from_effective_to ON notification.notification_policy (status, effective_from, effective_to);
+CREATE INDEX IF NOT EXISTS ix_push_token_device_id_status ON notification.push_token (device_id, status);
+CREATE INDEX IF NOT EXISTS ix_notification_member_id_created_at ON notification.notification (member_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_notification_delivery_attempt_provider_provider_message_id ON notification.notification_delivery_attempt (provider, provider_message_id);
+CREATE INDEX IF NOT EXISTS ix_nlp_intent_member_id_status ON nlp.nlp_intent (member_id, status);
+CREATE INDEX IF NOT EXISTS ix_nlp_intent_normalized_hash ON nlp.nlp_intent (normalized_hash);
+CREATE INDEX IF NOT EXISTS ix_nlp_model_version_status_created_at ON nlp.nlp_model_version (status, created_at);
+CREATE INDEX IF NOT EXISTS ix_nlp_ranking_config_active_from_active_to ON nlp.nlp_ranking_config (active_from, active_to);
+CREATE INDEX IF NOT EXISTS ix_nlp_processing_job_status_available_at ON nlp.nlp_processing_job (status, available_at);
+CREATE INDEX IF NOT EXISTS ix_match_request_status_created_at ON nlp.match_request (status, created_at);
+CREATE INDEX IF NOT EXISTS ix_match_request_request_hash ON nlp.match_request (request_hash);
+CREATE INDEX IF NOT EXISTS ix_nlp_feedback_label_created_at ON nlp.nlp_feedback (label, created_at);
+CREATE INDEX IF NOT EXISTS ix_match_suppression_member_id_context_id_ends_at ON nlp.match_suppression (member_id, context_id, ends_at);
+CREATE INDEX IF NOT EXISTS ix_match_suppression_intent_id_ends_at ON nlp.match_suppression (intent_id, ends_at);
+CREATE INDEX IF NOT EXISTS ix_evaluation_dataset_status_created_at ON nlp.evaluation_dataset (status, created_at);
+CREATE INDEX IF NOT EXISTS ix_evaluation_pair_dataset_id_split ON nlp.evaluation_pair (dataset_id, split);
+CREATE INDEX IF NOT EXISTS ix_evaluation_pair_gold_label ON nlp.evaluation_pair (gold_label);
+CREATE INDEX IF NOT EXISTS ix_evaluation_run_dataset_id_started_at ON nlp.evaluation_run (dataset_id, started_at);
+CREATE INDEX IF NOT EXISTS ix_evaluation_run_model_version_ranking_version ON nlp.evaluation_run (model_version, ranking_version);
+CREATE INDEX IF NOT EXISTS ix_moderation_case_status_priority_created_at ON moderation.moderation_case (status, priority, created_at);
+CREATE INDEX IF NOT EXISTS ix_moderation_case_subject_member_id_created_at ON moderation.moderation_case (subject_member_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_moderation_action_moderation_case_id_created_at ON moderation.moderation_action (moderation_case_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_moderation_action_actor_member_id_created_at ON moderation.moderation_action (actor_member_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_content_rule_rule_type_version ON moderation.content_rule (rule_type, version);
+CREATE INDEX IF NOT EXISTS ix_content_rule_rule_type_status ON moderation.content_rule (rule_type, status);
+CREATE INDEX IF NOT EXISTS ix_content_scan_resource_type_resource_id_scanned_at ON moderation.content_scan (resource_type, resource_id, scanned_at);
+CREATE INDEX IF NOT EXISTS ix_content_scan_result_scanned_at ON moderation.content_scan (result, scanned_at);
+CREATE INDEX IF NOT EXISTS ix_outbox_event_aggregate_type_aggregate_id_occurred_at ON ops.outbox_event (aggregate_type, aggregate_id, occurred_at);
+CREATE INDEX IF NOT EXISTS ix_background_job_resource_type_resource_id ON ops.background_job (resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS ix_audit_event_resource_type_resource_id_occurred_at ON ops.audit_event (resource_type, resource_id, occurred_at);
+CREATE INDEX IF NOT EXISTS ix_audit_event_actor_id_occurred_at ON ops.audit_event (actor_id, occurred_at);
+CREATE INDEX IF NOT EXISTS ix_audit_event_correlation_id ON ops.audit_event (correlation_id);
+CREATE INDEX IF NOT EXISTS ix_product_event_community_id_occurred_at ON analytics.product_event (community_id, occurred_at);
+
+DROP FUNCTION ops.add_constraint_if_missing(name, name, name, text);

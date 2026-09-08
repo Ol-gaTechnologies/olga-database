@@ -1,38 +1,50 @@
-SET NOCOUNT ON;
-SET XACT_ABORT ON;
-GO
+BEGIN;
 
-IF SCHEMA_ID(N'core') IS NULL EXEC(N'CREATE SCHEMA [core] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'iam') IS NULL EXEC(N'CREATE SCHEMA [iam] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'consent') IS NULL EXEC(N'CREATE SCHEMA [consent] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'event') IS NULL EXEC(N'CREATE SCHEMA [event] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'social') IS NULL EXEC(N'CREATE SCHEMA [social] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'chat') IS NULL EXEC(N'CREATE SCHEMA [chat] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'storage') IS NULL EXEC(N'CREATE SCHEMA [storage] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'notification') IS NULL EXEC(N'CREATE SCHEMA [notification] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'nlp') IS NULL EXEC(N'CREATE SCHEMA [nlp] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'moderation') IS NULL EXEC(N'CREATE SCHEMA [moderation] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'ops') IS NULL EXEC(N'CREATE SCHEMA [ops] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'analytics') IS NULL EXEC(N'CREATE SCHEMA [analytics] AUTHORIZATION dbo');
-GO
-IF SCHEMA_ID(N'admin') IS NULL EXEC(N'CREATE SCHEMA [admin] AUTHORIZATION dbo');
-GO
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 
-IF NOT EXISTS (SELECT 1 FROM sys.sequences WHERE name = N'MessageSequence' AND schema_id = SCHEMA_ID(N'chat'))
-    EXEC(N'CREATE SEQUENCE chat.MessageSequence AS bigint START WITH 1 INCREMENT BY 1 CACHE 100');
-GO
+CREATE SCHEMA IF NOT EXISTS core;
+CREATE SCHEMA IF NOT EXISTS iam;
+CREATE SCHEMA IF NOT EXISTS consent;
+CREATE SCHEMA IF NOT EXISTS event;
+CREATE SCHEMA IF NOT EXISTS social;
+CREATE SCHEMA IF NOT EXISTS chat;
+CREATE SCHEMA IF NOT EXISTS storage;
+CREATE SCHEMA IF NOT EXISTS notification;
+CREATE SCHEMA IF NOT EXISTS nlp;
+CREATE SCHEMA IF NOT EXISTS moderation;
+CREATE SCHEMA IF NOT EXISTS ops;
+CREATE SCHEMA IF NOT EXISTS analytics;
+CREATE SCHEMA IF NOT EXISTS admin;
 
-IF NOT EXISTS (SELECT 1 FROM sys.sequences WHERE name = N'SyncChangeSequence' AND schema_id = SCHEMA_ID(N'ops'))
-    EXEC(N'CREATE SEQUENCE ops.SyncChangeSequence AS bigint START WITH 1 INCREMENT BY 1 CACHE 100');
-GO
+CREATE SEQUENCE IF NOT EXISTS chat.message_sequence AS bigint START WITH 1 INCREMENT BY 1 CACHE 100;
+CREATE SEQUENCE IF NOT EXISTS ops.sync_change_sequence AS bigint START WITH 1 INCREMENT BY 1 CACHE 100;
+
+CREATE OR REPLACE FUNCTION ops.set_row_version()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.row_version := OLD.row_version + 1;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION ops.add_constraint_if_missing(
+    p_schema name, p_table name, p_constraint name, p_definition text
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE n.nspname = p_schema AND t.relname = p_table AND c.conname = p_constraint
+    ) THEN
+        EXECUTE format('ALTER TABLE %I.%I ADD CONSTRAINT %I %s', p_schema, p_table, p_constraint, p_definition);
+    END IF;
+END;
+$$;

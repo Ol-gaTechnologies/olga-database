@@ -165,7 +165,7 @@ def main() -> None:
     if "EXECUTE FUNCTION ops.archive_row_version" not in texts["015_audit_history.sql"]:
         fail("owned temporal history trigger is missing")
     if "ALTER FUNCTION versioning()" in texts["015_audit_history.sql"]:
-        fail("Azure-owned temporal_tables functions must not be altered")
+        fail("Azure-owned extension functions must not be altered")
     if "v_old_row := to_jsonb(OLD)" not in texts["025_invariants.sql"] or "OLD.accepted_request_id" in texts["025_invariants.sql"]:
         fail("accepted-request deferred validation must use relation-safe trigger record extraction")
     if "NULLS NOT DISTINCT WHERE status = 'ACTIVE'" not in texts["020_constraints_indexes.sql"]:
@@ -195,17 +195,11 @@ def main() -> None:
     if "REVOKE INSERT, UPDATE, DELETE ON chat.conversation, chat.conversation_participant" not in security:
         fail("direct chat mutations can bypass atomic controlled functions")
 
-    manifest = texts["001_schemas_sequences.sql"] + (ROOT / "deploy.sql").read_text(encoding="utf-8")
-    for name in BASELINE_FILES:
-        if name != "001_schemas_sequences.sql" and name not in manifest:
-            fail(f"deploy.sql omits {name}")
-    if "RAISE EXCEPTION" not in (ROOT / "upgrade_v2_2_to_v2_3.sql").read_text(encoding="utf-8"):
-        fail("unsupported cross-engine upgrade entry point is not fail-closed")
     full_setup = (ROOT / "OLGA_Connect_PostgreSQL_Full_Setup.sql").read_text(encoding="utf-8")
     for name, text in texts.items():
         if text.strip() not in full_setup:
             fail(f"standalone setup is stale relative to {name}")
-    print(f"Static validation passed: {len(tables)} PostgreSQL tables; foreign keys, indexes, functions, and manifests resolve.")
+    print(f"Static validation passed: {len(tables)} PostgreSQL tables; foreign keys, indexes, functions, and generated setup resolve.")
 
 
 if __name__ == "__main__":

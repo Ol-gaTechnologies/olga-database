@@ -1,82 +1,80 @@
-# OLGA Connect PostgreSQL deployment package
+# OLGA Connect PostgreSQL database
 
-This package creates the OLGA Connect Release 1 schema defined by Database Architecture and Table-Level Design v2.3, with the v2.4 auditability hardening. The clean baseline targets PostgreSQL 17 on Azure Database for PostgreSQL Flexible Server and uses lower_snake_case physical identifiers throughout.
+PostgreSQL 17 baseline for OLGA Connect Release 1 on Azure Database for PostgreSQL Flexible
+Server. Physical identifiers use lower_snake_case and the database is organized by bounded domain
+schemas inside one database.
 
-## Baseline contents
+## Repository contents
 
-- `001_schemas_sequences.sql`: domain schemas, approved extensions, sequences, and shared migration helpers.
-- `010_tables.sql`: all 66 documented product tables, PostgreSQL types, and trigger-managed concurrency versions.
-- `015_audit_history.sql`: database-sourced creator/updater attribution and selective system-period history.
-- `020_constraints_indexes.sql`: idempotent foreign keys, checks, unique rules, and partial B-tree indexes.
-- `025_invariants.sql`: cross-row and polymorphic integrity triggers.
-- `030_views.sql`: controlled security and integration views.
-- `040_procedures.sql`: PostgreSQL functions for bounded reads and atomic, idempotent workflows.
-- `050_seed.sql`: roles, permissions, `ranking-v1`, and optional provisional QA notification policies.
-- `060_security.sql`: NOLOGIN service roles and least-privilege grants.
-- `070_bind_identities.template.sql`: PostgreSQL role-membership template for pre-provisioned Azure identities.
-- `090_verify.sql`: post-deployment inventory, type, constraint, index, and seed checks.
-- `deploy.sql` and `deploy.ps1`: psql deployment entry points.
-- `Dockerfile` and `container/run-migrations.sh`: one-off Container Apps Job image for private-network deployment.
-- `azure-postgresql-deployment-inputs.example.json`: PostgreSQL Flexible Server provisioning inputs without credentials.
-- `OLGA_Connect_PostgreSQL_Full_Setup.sql`: standalone transactional setup script.
-- `docs/architecture-decisions-v2.4.md`: actor, lifecycle, temporal-history, privacy, and query decisions.
-
-The legacy v2.2 Azure SQL upgrade files remain source-reference artifacts and are not part of the PostgreSQL baseline manifest. Migrate populated SQL Server databases through a separately reviewed data-migration plan; do not execute those upgrade files against PostgreSQL.
+- `001_schemas_sequences.sql` through `090_verify.sql`: ordered, maintainable schema source.
+- `build_full_setup.ps1`: rebuilds the standalone setup from the ordered source modules.
+- `OLGA_Connect_PostgreSQL_Full_Setup.sql`: generated, transactional setup for a new database.
+- `deploy_dbeaver.sql` and `deploy_dbeaver_prd.sql`: optional DBeaver database-name guards for
+  `olga_connect_dev` and `olga_connect_prod`.
+- `070_bind_identities.template.sql`: separately executed template for pre-provisioned Azure
+  identities.
+- `tests/validate_static.py`: static consistency and architecture validation.
+- `tests/verify_chat_atomicity.sql` and `tests/verify_temporal_history.sql`: rollback-only
+  integration tests for a development/test database.
+- `docs/dbeaver-deployment.md`: concise deployment and recovery runbook.
+- `docs/architecture-decisions-v2.4.md`: security, lifecycle, history and matching decisions that
+  are not self-evident from the DDL.
 
 ## Prerequisites
 
-- PostgreSQL 17 database with the `vector` and `pg_stat_statements` extensions allowlisted.
-- A deployment identity permitted to create schemas, extensions, NOLOGIN roles, tables, functions, and grants.
-- `psql` available on the deployment workstation or runner.
-- TLS connectivity to the PostgreSQL endpoint; secrets supplied through `.pgpass`, `PGPASSFILE`, or the approved identity workflow.
+- PostgreSQL 17.
+- The `vector` and `pg_stat_statements` extensions allowlisted on the Azure server.
+- A migration identity permitted to create schemas, extensions, NOLOGIN roles, tables, functions
+  and grants.
+- TLS certificate verification configured in the database client.
 
 ## Deploy
 
-```powershell
-.\deploy.ps1 `
-  -ServerFqdn '<server>.postgres.database.azure.com' `
-  -DatabaseName '<database>' `
-  -UserName '<deployment-user>'
-```
+Follow [the DBeaver runbook](docs/dbeaver-deployment.md). The normal deployment artifact is
+`OLGA_Connect_PostgreSQL_Full_Setup.sql`; execute it as a script, not as individual statements.
 
-Pass `-SeedMvpPolicies 1` only for approved QA environments. The default is fail-closed and does not activate provisional notification policies.
+`070_bind_identities.template.sql` is intentionally excluded from the baseline. Replace its
+placeholders and execute it only after the corresponding Azure identities and PostgreSQL
+Microsoft Entra principals exist.
 
-The standalone script can be executed with any PostgreSQL client that preserves the transaction. It intentionally omits psql variables, so provisional policies remain disabled.
+## Maintain
 
-## Manual deployment policy
-
-This repository does not contain a GitHub Actions workflow. Commits, pushes, and pull requests therefore do not validate or deploy the database through GitHub Actions. Run validation and deployment explicitly from an approved workstation or controlled deployment environment using the commands in this document.
-
-The Docker image and `container/run-migrations.sh` remain available for an operator-triggered Container Apps Job when private-network access is required. They are not invoked automatically by this repository.
-
-## Architecture constraints preserved
-
-- Product ownership remains separated by domain schema; NLP consumes controlled projections and does not grant visibility or communication rights.
-- UTC business timestamps use `timestamptz` and `CURRENT_TIMESTAMP`.
-- Mutable API resources use `bigint row_version`, incremented by a shared `BEFORE UPDATE` trigger and returned as an ETag by APIs.
-- Internal numeric keys use `GENERATED BY DEFAULT AS IDENTITY`; stable API identifiers remain opaque `varchar(64)` values.
-- Validated metadata and snapshots use `jsonb`; encrypted values use `bytea`.
-- NLP embeddings use `vector(1536)`. Exact bounded retrieval remains the baseline; add HNSW only after representative latency and recall evidence.
-- Partial unique indexes enforce active-row invariants. Nullable notification-policy scope uses `NULLS NOT DISTINCT`.
-- Runtime roles receive no DDL privileges. Append-only audit and authorization catalogs explicitly revoke destructive writes.
-- Mutable `row_version` resources capture `created_by` and `updated_by`. APIs call parameterized `ops.set_audit_context` inside each mutation transaction; the database login is the fail-safe fallback.
-- Connection acceptance, message creation, and message receipts atomically claim an actor-scoped idempotency key, persist the business change, append an outbox event and member-scoped sync changes, and cache the replay result.
-- Conversations are commit-time constrained to exactly the two connection members; read cursors and delivery/read receipts are conversation-bound and monotonic.
-- An OLGA-owned security-definer trigger preserves full row versions for low-volume reference and policy tables in the read-only `history` schema. This avoids altering Azure-owned extension functions or granting runtime roles direct history-table writes. PII-rich content, messages, ciphertext, location presence, and transient processing data are intentionally excluded.
-
-## Verification
+Edit the numbered source modules, not the generated full-setup file. Rebuild it afterward:
 
 ```powershell
-& '<bundled-or-approved-python>' .\tests\validate_static.py
+.\build_full_setup.ps1
 ```
 
-`090_verify.sql` also runs inside the deployment transaction and rolls back the baseline if required objects, PostgreSQL-native types, validated constraints, valid indexes, or authorization seeds are missing.
+Then run:
 
-After a successful deployment, run `tests/verify_chat_atomicity.sql` with an approved migration-owner
-test connection. It exercises connection acceptance, message creation, receipt updates, exact replay,
-outbox/sync cardinality, participant rejection, read-cursor advancement, and immutable receipt times;
-the entire fixture is rolled back.
+```powershell
+& '<approved-python>' .\tests\validate_static.py
+```
 
-Run `tests/verify_temporal_history.sql` with the same kind of connection to exercise the owned
-system-period trigger. It updates one seeded role, validates the archived and current periods, and
-rolls back the entire test.
+The validator confirms the 66-table inventory, PostgreSQL-native types, constraints, indexes,
+controlled functions and that the generated setup contains every current source module.
+
+## Database verification
+
+`090_verify.sql` is included at the end of the full setup. A failed check aborts the deployment
+transaction.
+
+On development/test only, execute these with a migration-owner connection:
+
+1. `tests/verify_temporal_history.sql`
+2. `tests/verify_chat_atomicity.sql`
+
+Both tests are self-contained and finish with `ROLLBACK`.
+
+## Guardrails
+
+- Domain schemas are namespaces and permission boundaries within one transactional database.
+- Mutable API resources use trigger-managed `bigint row_version` values for ETags.
+- Internal numeric keys use identity columns; external IDs remain opaque `varchar(64)`.
+- Sensitive ciphertext uses `bytea`; business timestamps use `timestamptz`.
+- NLP embeddings use `vector(1536)`; matching applies eligibility first and exact cosine distance
+  to a bounded candidate set. ANN indexes are intentionally absent.
+- Connection, chat and receipt mutations use actor-scoped idempotency, transactional outbox and
+  member-scoped synchronization records.
+- The owned system-period trigger writes selected reference/configuration history without granting
+  application roles direct access to history tables.

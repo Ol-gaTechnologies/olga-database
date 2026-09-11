@@ -23,7 +23,7 @@ DECLARE
         'history.nlp_nlp_model_version','history.nlp_nlp_ranking_config','history.moderation_content_rule',
         'history.ops_retention_policy'
     ];
-    expected_temporal_tables text[] := ARRAY[
+    expected_history_source_tables text[] := ARRAY[
         'iam.permission','iam.role','core.sector','consent.consent_policy','event.venue',
         'event.event_matching_policy','notification.notification_policy','nlp.nlp_model_version',
         'nlp.nlp_ranking_config','moderation.content_rule','ops.retention_policy'
@@ -74,7 +74,7 @@ BEGIN
     FOREACH item IN ARRAY expected_history_tables LOOP
         IF to_regclass(item) IS NULL THEN RAISE EXCEPTION 'Required temporal history table is missing: %', item; END IF;
     END LOOP;
-    FOREACH item IN ARRAY expected_temporal_tables LOOP
+    FOREACH item IN ARRAY expected_history_source_tables LOOP
         IF NOT EXISTS (
             SELECT 1 FROM pg_trigger t
             WHERE t.tgrelid = item::regclass AND t.tgname = 'versioning_history'

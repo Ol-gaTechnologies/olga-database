@@ -145,25 +145,54 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 DECLARE
+    v_old_connection_request_id varchar(64);
+    v_new_connection_request_id varchar(64);
     v_connection_request_id varchar(64);
+    v_old_row jsonb;
+    v_new_row jsonb;
 BEGIN
-    v_connection_request_id := CASE
-        WHEN TG_TABLE_NAME = 'connection_request' THEN
-            CASE WHEN TG_OP = 'DELETE' THEN OLD.connection_request_id ELSE NEW.connection_request_id END
-        ELSE
-            CASE WHEN TG_OP = 'DELETE' THEN OLD.accepted_request_id ELSE NEW.accepted_request_id END
-    END;
-
-    IF EXISTS (
-        SELECT 1 FROM social.connection_request cr
-        WHERE cr.connection_request_id = v_connection_request_id AND cr.status = 'ACCEPTED'
-    ) AND NOT EXISTS (
-        SELECT 1 FROM social.connection c
-        WHERE c.accepted_request_id = v_connection_request_id
-    ) THEN
-        RAISE EXCEPTION USING ERRCODE = '23514',
-            MESSAGE = 'An accepted connection request must have its canonical connection in the same transaction.';
+    IF TG_TABLE_SCHEMA <> 'social'
+       OR TG_TABLE_NAME NOT IN ('connection_request', 'connection') THEN
+        RAISE EXCEPTION 'Unexpected relation for accepted-request validation: %.%.',
+            TG_TABLE_SCHEMA, TG_TABLE_NAME USING ERRCODE = '55000';
     END IF;
+
+    -- Convert the relation-specific trigger records before extracting fields. Direct references
+    -- to fields from both relations in one CASE expression are resolved by PostgreSQL even when
+    -- that branch is not selected, causing undefined-column errors.
+    IF TG_OP <> 'INSERT' THEN
+        v_old_row := to_jsonb(OLD);
+    END IF;
+    IF TG_OP <> 'DELETE' THEN
+        v_new_row := to_jsonb(NEW);
+    END IF;
+
+    IF TG_TABLE_NAME = 'connection_request' THEN
+        v_old_connection_request_id := v_old_row ->> 'connection_request_id';
+        v_new_connection_request_id := v_new_row ->> 'connection_request_id';
+    ELSE
+        v_old_connection_request_id := v_old_row ->> 'accepted_request_id';
+        v_new_connection_request_id := v_new_row ->> 'accepted_request_id';
+    END IF;
+
+    FOR v_connection_request_id IN
+        SELECT DISTINCT affected_id
+        FROM unnest(ARRAY[
+            v_old_connection_request_id, v_new_connection_request_id
+        ]) AS affected(affected_id)
+        WHERE affected_id IS NOT NULL
+    LOOP
+        IF EXISTS (
+            SELECT 1 FROM social.connection_request cr
+            WHERE cr.connection_request_id = v_connection_request_id AND cr.status = 'ACCEPTED'
+        ) AND NOT EXISTS (
+            SELECT 1 FROM social.connection c
+            WHERE c.accepted_request_id = v_connection_request_id
+        ) THEN
+            RAISE EXCEPTION USING ERRCODE = '23514',
+                MESSAGE = 'An accepted connection request must have its canonical connection in the same transaction.';
+        END IF;
+    END LOOP;
     RETURN NULL;
 END;
 $$;

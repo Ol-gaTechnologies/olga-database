@@ -166,6 +166,8 @@ def main() -> None:
         fail("owned temporal history trigger is missing")
     if "ALTER FUNCTION versioning()" in texts["015_audit_history.sql"]:
         fail("Azure-owned temporal_tables functions must not be altered")
+    if "v_old_row := to_jsonb(OLD)" not in texts["025_invariants.sql"] or "OLD.accepted_request_id" in texts["025_invariants.sql"]:
+        fail("accepted-request deferred validation must use relation-safe trigger record extraction")
     if "NULLS NOT DISTINCT WHERE status = 'ACTIVE'" not in texts["020_constraints_indexes.sql"]:
         fail("global active notification policies are not null-safe unique")
     if "ux_push_token_fingerprint" not in texts["020_constraints_indexes.sql"] or re.search(

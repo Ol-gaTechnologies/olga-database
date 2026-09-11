@@ -76,3 +76,7 @@ After a successful deployment, run `tests/verify_chat_atomicity.sql` with an app
 test connection. It exercises connection acceptance, message creation, receipt updates, exact replay,
 outbox/sync cardinality, participant rejection, read-cursor advancement, and immutable receipt times;
 the entire fixture is rolled back.
+
+Run `tests/verify_temporal_history.sql` with the same kind of connection to exercise the owned
+system-period trigger. It updates one seeded role, validates the archived and current periods, and
+rolls back the entire test.

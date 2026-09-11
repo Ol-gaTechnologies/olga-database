@@ -154,18 +154,18 @@ def main() -> None:
     for table_name in ("iam.member_identity", "iam.role", "event.venue"):
         if "status" not in tables[table_name]:
             fail(f"reusable resource lacks lifecycle status: {table_name}")
-    if "CREATE EXTENSION IF NOT EXISTS temporal_tables" not in texts["001_schemas_sequences.sql"]:
-        fail("temporal_tables extension is not enabled")
     if "CREATE SCHEMA IF NOT EXISTS history" not in texts["001_schemas_sequences.sql"]:
         fail("history schema is not created")
     if "CREATE TRIGGER set_audit_actor" not in texts["015_audit_history.sql"]:
         fail("database-sourced audit actor trigger is missing")
     if "CREATE TRIGGER versioning_history" not in texts["015_audit_history.sql"]:
         fail("system-period history trigger is missing")
-    if "SECURITY DEFINER\nSET search_path = pg_catalog, ops" not in texts["015_audit_history.sql"]:
+    if "CREATE OR REPLACE FUNCTION ops.archive_row_version()" not in texts["015_audit_history.sql"] or "SECURITY DEFINER\nSET search_path = pg_catalog, ops" not in texts["015_audit_history.sql"]:
         fail("audit actor trigger is not secured")
-    if "REVOKE EXECUTE ON FUNCTION set_system_time(timestamptz) FROM PUBLIC" not in texts["015_audit_history.sql"]:
-        fail("temporal system-time spoofing guard is missing")
+    if "EXECUTE FUNCTION ops.archive_row_version" not in texts["015_audit_history.sql"]:
+        fail("owned temporal history trigger is missing")
+    if "ALTER FUNCTION versioning()" in texts["015_audit_history.sql"]:
+        fail("Azure-owned temporal_tables functions must not be altered")
     if "NULLS NOT DISTINCT WHERE status = 'ACTIVE'" not in texts["020_constraints_indexes.sql"]:
         fail("global active notification policies are not null-safe unique")
     if "ux_push_token_fingerprint" not in texts["020_constraints_indexes.sql"] or re.search(

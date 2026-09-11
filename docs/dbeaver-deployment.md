@@ -7,7 +7,7 @@ seed behavior from `OLGA_Connect_PostgreSQL_Full_Setup.sql`.
 ## Before deployment
 
 1. Confirm that the target is a new PostgreSQL 17 database.
-2. Confirm that `vector`, `pg_stat_statements`, and `temporal_tables` are allowlisted.
+2. Confirm that `vector` and `pg_stat_statements` are allowlisted.
 3. Connect as `olga_migration_admin` using the connection secret retrieved by
    your authorized Azure user. This account owns the baseline objects and can
    create or alter schemas, tables, functions, roles, and grants.

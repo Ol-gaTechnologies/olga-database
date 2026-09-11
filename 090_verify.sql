@@ -32,7 +32,7 @@ DECLARE
         'nlp.get_requester_intent','nlp.get_eligible_candidates','nlp.save_match_results','nlp.save_feedback',
         'social.accept_connection_request','chat.save_message','chat.save_message_receipt',
         'event.purge_expired_presence','notification.try_enqueue',
-        'ops.set_audit_context','ops.current_audit_actor_id','ops.set_audit_actor'
+        'ops.set_audit_context','ops.current_audit_actor_id','ops.set_audit_actor','ops.archive_row_version'
     ];
     expected_triggers text[] := ARRAY[
         'storage.file_asset_link.enforce_file_asset_link_resource',
@@ -78,7 +78,7 @@ BEGIN
         IF NOT EXISTS (
             SELECT 1 FROM pg_trigger t
             WHERE t.tgrelid = item::regclass AND t.tgname = 'versioning_history'
-              AND t.tgfoid = 'versioning()'::regprocedure AND t.tgenabled <> 'D'
+              AND t.tgfoid = 'ops.archive_row_version()'::regprocedure AND t.tgenabled <> 'D'
         ) THEN RAISE EXCEPTION 'Required temporal versioning trigger is missing: %', item; END IF;
     END LOOP;
     FOREACH item IN ARRAY expected_functions LOOP
@@ -118,19 +118,9 @@ BEGIN
           AND conname = 'pk_idempotency_record_'
           AND pg_get_constraintdef(oid) = 'PRIMARY KEY (scope, actor_id, idempotency_key)'
     ) THEN RAISE EXCEPTION 'Idempotency primary key must be scoped by operation, actor and client key.'; END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'temporal_tables') THEN
-        RAISE EXCEPTION 'temporal_tables extension is missing.';
+    IF NOT (SELECT prosecdef FROM pg_proc WHERE oid = 'ops.archive_row_version()'::regprocedure) THEN
+        RAISE EXCEPTION 'Temporal history trigger must run as a security-definer function.';
     END IF;
-    IF NOT (SELECT prosecdef FROM pg_proc WHERE oid = 'versioning()'::regprocedure) THEN
-        RAISE EXCEPTION 'Temporal versioning must run as a security-definer function.';
-    END IF;
-    IF EXISTS (
-        SELECT 1
-        FROM pg_proc p
-        CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
-        WHERE p.oid = 'set_system_time(timestamptz)'::regprocedure
-          AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
-    ) THEN RAISE EXCEPTION 'PUBLIC must not be able to spoof temporal system time.'; END IF;
     IF to_regclass('chat.attachment') IS NOT NULL THEN RAISE EXCEPTION 'Legacy chat.attachment must not remain.'; END IF;
     IF EXISTS (
         SELECT 1 FROM information_schema.columns

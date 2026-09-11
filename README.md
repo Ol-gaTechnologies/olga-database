@@ -25,7 +25,7 @@ The legacy v2.2 Azure SQL upgrade files remain source-reference artifacts and ar
 
 ## Prerequisites
 
-- PostgreSQL 17 database with the `vector`, `pg_stat_statements`, and `temporal_tables` extensions allowlisted.
+- PostgreSQL 17 database with the `vector` and `pg_stat_statements` extensions allowlisted.
 - A deployment identity permitted to create schemas, extensions, NOLOGIN roles, tables, functions, and grants.
 - `psql` available on the deployment workstation or runner.
 - TLS connectivity to the PostgreSQL endpoint; secrets supplied through `.pgpass`, `PGPASSFILE`, or the approved identity workflow.
@@ -62,7 +62,7 @@ The Docker image and `container/run-migrations.sh` remain available for an opera
 - Mutable `row_version` resources capture `created_by` and `updated_by`. APIs call parameterized `ops.set_audit_context` inside each mutation transaction; the database login is the fail-safe fallback.
 - Connection acceptance, message creation, and message receipts atomically claim an actor-scoped idempotency key, persist the business change, append an outbox event and member-scoped sync changes, and cache the replay result.
 - Conversations are commit-time constrained to exactly the two connection members; read cursors and delivery/read receipts are conversation-bound and monotonic.
-- Azure PostgreSQL's allowlisted `temporal_tables` extension preserves full row versions for low-volume reference and policy tables in the read-only `history` schema. PII-rich content, messages, ciphertext, location presence, and transient processing data are intentionally excluded.
+- An OLGA-owned security-definer trigger preserves full row versions for low-volume reference and policy tables in the read-only `history` schema. This avoids altering Azure-owned extension functions or granting runtime roles direct history-table writes. PII-rich content, messages, ciphertext, location presence, and transient processing data are intentionally excluded.
 
 ## Verification
 

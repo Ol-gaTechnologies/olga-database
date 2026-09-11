@@ -31,8 +31,8 @@ The prior member/profile checks were also aligned with their documented `ANONYMI
 
 ## System-period history
 
-Azure Database for PostgreSQL Flexible Server supports the `temporal_tables` extension. Version 2.4
-uses it for these low-volume, audit-sensitive reference and policy tables:
+Version 2.4 uses an OLGA-owned system-period trigger for these low-volume, audit-sensitive
+reference and policy tables:
 
 - `iam.permission`, `iam.role`, `core.sector`
 - `consent.consent_policy`
@@ -52,10 +52,11 @@ WHERE role_code = 'MODERATOR'
   AND sys_period @> TIMESTAMPTZ '2026-09-01 00:00:00+00';
 ```
 
-PostgreSQL does not provide Azure SQL's `FOR SYSTEM_TIME` query syntax. The extension implements the
-same system-period behavior through triggers. The trigger runs with the migration owner, while only
-the admin reader receives history access. Public execution of `set_system_time` is revoked to prevent
-timestamp spoofing.
+PostgreSQL does not provide Azure SQL's `FOR SYSTEM_TIME` query syntax. The
+`ops.archive_row_version` trigger implements the required system-period behavior and runs with the
+migration owner, while only the admin reader receives history access. Using an owned trigger avoids
+altering Azure-managed extension functions and avoids granting runtime roles direct history-table
+writes. Its timestamp comes only from `transaction_timestamp()`, so callers cannot spoof it.
 
 Full-row temporal history is intentionally not enabled for profiles, messages, identity ciphertext,
 files, presence, or transient processing tables. Copying that data would increase breach impact and

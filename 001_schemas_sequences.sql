@@ -5,7 +5,6 @@ SELECT pg_advisory_xact_lock(hashtextextended('olga_schema_migration', 0));
 
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-CREATE EXTENSION IF NOT EXISTS temporal_tables;
 
 CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS iam;

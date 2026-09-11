@@ -15,7 +15,6 @@ SELECT pg_advisory_xact_lock(hashtextextended('olga_schema_migration', 0));
 
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-CREATE EXTENSION IF NOT EXISTS temporal_tables;
 
 CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS iam;
@@ -1181,14 +1180,72 @@ BEGIN
 END;
 $block$;
 
--- PostgreSQL 17 has no native SQL Server-style FOR SYSTEM_TIME syntax. Azure Flexible Server
--- supports temporal_tables, which archives OLD rows with a tstzrange system period.
+-- PostgreSQL 17 has no native SQL Server-style FOR SYSTEM_TIME syntax. Archive OLD rows with an
+-- OLGA-owned trigger because Azure-owned extension functions cannot safely be changed to
+-- SECURITY DEFINER by a customer administrator.
 -- History is intentionally limited to low-volume reference/configuration tables; copying member
 -- content, identity ciphertext, messages or presence would conflict with privacy and retention.
--- Run versioning with the migration owner so runtime roles never receive direct history-table writes.
-ALTER FUNCTION versioning() SECURITY DEFINER;
-ALTER FUNCTION versioning() SET search_path = pg_catalog, public;
-REVOKE EXECUTE ON FUNCTION set_system_time(timestamptz) FROM PUBLIC;
+CREATE OR REPLACE FUNCTION ops.archive_row_version()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, ops
+AS $function$
+DECLARE
+    v_effective_at timestamptz := transaction_timestamp();
+    v_period_start timestamptz;
+    v_history_table regclass;
+    v_history_schema name;
+BEGIN
+    IF TG_WHEN <> 'BEFORE' OR TG_LEVEL <> 'ROW'
+       OR TG_OP NOT IN ('INSERT', 'UPDATE', 'DELETE') THEN
+        RAISE EXCEPTION 'archive_row_version must be a BEFORE ROW trigger for INSERT, UPDATE or DELETE.'
+            USING ERRCODE = '55000';
+    END IF;
+    IF TG_NARGS <> 1 THEN
+        RAISE EXCEPTION 'archive_row_version requires one history-table argument.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    v_history_table := to_regclass(TG_ARGV[0]);
+    IF v_history_table IS NULL THEN
+        RAISE EXCEPTION 'History table % does not exist.', TG_ARGV[0]
+            USING ERRCODE = '42P01';
+    END IF;
+    SELECT n.nspname
+      INTO v_history_schema
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE c.oid = v_history_table;
+    IF v_history_schema <> 'history' THEN
+        RAISE EXCEPTION 'History target must be in the history schema.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    IF TG_OP = 'INSERT' THEN
+        NEW.sys_period := tstzrange(v_effective_at, NULL, '[)');
+        RETURN NEW;
+    END IF;
+
+    v_period_start := lower(OLD.sys_period);
+    IF v_period_start IS NULL OR v_period_start > v_effective_at THEN
+        RAISE EXCEPTION 'Invalid system period on %.%.', TG_TABLE_SCHEMA, TG_TABLE_NAME
+            USING ERRCODE = '22000';
+    END IF;
+
+    -- Multiple changes to a row in one transaction collapse into one externally visible version.
+    IF v_period_start < v_effective_at THEN
+        OLD.sys_period := tstzrange(v_period_start, v_effective_at, '[)');
+        EXECUTE format('INSERT INTO %s SELECT ($1).*', v_history_table) USING OLD;
+    END IF;
+
+    IF TG_OP = 'UPDATE' THEN
+        NEW.sys_period := tstzrange(v_effective_at, NULL, '[)');
+        RETURN NEW;
+    END IF;
+    RETURN OLD;
+END;
+$function$;
 
 DO $block$
 DECLARE
@@ -1229,8 +1286,8 @@ BEGIN
         );
         EXECUTE format('DROP TRIGGER IF EXISTS versioning_history ON %I.%I', target.table_schema, target.table_name);
         EXECUTE format(
-            'CREATE TRIGGER versioning_history BEFORE INSERT OR UPDATE OR DELETE ON %I.%I FOR EACH ROW EXECUTE FUNCTION versioning(%L, %L, true)',
-            target.table_schema, target.table_name, 'sys_period', 'history.' || quote_ident(history_table)
+            'CREATE TRIGGER versioning_history BEFORE INSERT OR UPDATE OR DELETE ON %I.%I FOR EACH ROW EXECUTE FUNCTION ops.archive_row_version(%L)',
+            target.table_schema, target.table_name, 'history.' || quote_ident(history_table)
         );
         EXECUTE format(
             'CREATE OR REPLACE VIEW history.%I AS SELECT * FROM %I.%I UNION ALL SELECT * FROM history.%I',
@@ -3127,7 +3184,7 @@ DECLARE
         'nlp.get_requester_intent','nlp.get_eligible_candidates','nlp.save_match_results','nlp.save_feedback',
         'social.accept_connection_request','chat.save_message','chat.save_message_receipt',
         'event.purge_expired_presence','notification.try_enqueue',
-        'ops.set_audit_context','ops.current_audit_actor_id','ops.set_audit_actor'
+        'ops.set_audit_context','ops.current_audit_actor_id','ops.set_audit_actor','ops.archive_row_version'
     ];
     expected_triggers text[] := ARRAY[
         'storage.file_asset_link.enforce_file_asset_link_resource',
@@ -3173,7 +3230,7 @@ BEGIN
         IF NOT EXISTS (
             SELECT 1 FROM pg_trigger t
             WHERE t.tgrelid = item::regclass AND t.tgname = 'versioning_history'
-              AND t.tgfoid = 'versioning()'::regprocedure AND t.tgenabled <> 'D'
+              AND t.tgfoid = 'ops.archive_row_version()'::regprocedure AND t.tgenabled <> 'D'
         ) THEN RAISE EXCEPTION 'Required temporal versioning trigger is missing: %', item; END IF;
     END LOOP;
     FOREACH item IN ARRAY expected_functions LOOP
@@ -3213,19 +3270,9 @@ BEGIN
           AND conname = 'pk_idempotency_record_'
           AND pg_get_constraintdef(oid) = 'PRIMARY KEY (scope, actor_id, idempotency_key)'
     ) THEN RAISE EXCEPTION 'Idempotency primary key must be scoped by operation, actor and client key.'; END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'temporal_tables') THEN
-        RAISE EXCEPTION 'temporal_tables extension is missing.';
+    IF NOT (SELECT prosecdef FROM pg_proc WHERE oid = 'ops.archive_row_version()'::regprocedure) THEN
+        RAISE EXCEPTION 'Temporal history trigger must run as a security-definer function.';
     END IF;
-    IF NOT (SELECT prosecdef FROM pg_proc WHERE oid = 'versioning()'::regprocedure) THEN
-        RAISE EXCEPTION 'Temporal versioning must run as a security-definer function.';
-    END IF;
-    IF EXISTS (
-        SELECT 1
-        FROM pg_proc p
-        CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
-        WHERE p.oid = 'set_system_time(timestamptz)'::regprocedure
-          AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
-    ) THEN RAISE EXCEPTION 'PUBLIC must not be able to spoof temporal system time.'; END IF;
     IF to_regclass('chat.attachment') IS NOT NULL THEN RAISE EXCEPTION 'Legacy chat.attachment must not remain.'; END IF;
     IF EXISTS (
         SELECT 1 FROM information_schema.columns

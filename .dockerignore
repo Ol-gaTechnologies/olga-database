@@ -1,0 +1,12 @@
+.git
+.github
+docs
+migrations
+tests
+deployment-output
+*.md
+*.ps1
+*.json
+OLGA_Connect_PostgreSQL_Full_Setup.sql
+upgrade_v2_2_to_v2_3.sql
+070_bind_identities.template.sql

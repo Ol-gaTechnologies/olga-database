@@ -10,6 +10,7 @@
   "skuName": "<approved-flexible-server-sku>",
   "storageSizeGb": 32,
   "postgresVersion": "17",
+  "allowedExtensions": ["vector", "pg_stat_statements", "temporal_tables"],
   "publicNetworkAccess": "Disabled",
   "privateEndpointSubnetResourceId": "<subnet-resource-id>",
   "managedIdentities": {

@@ -1,7 +1,11 @@
 BEGIN;
 
+-- Serialize schema deployments even if two external pipelines are started.
+SELECT pg_advisory_xact_lock(hashtextextended('olga_schema_migration', 0));
+
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+CREATE EXTENSION IF NOT EXISTS temporal_tables;
 
 CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS iam;
@@ -16,6 +20,7 @@ CREATE SCHEMA IF NOT EXISTS moderation;
 CREATE SCHEMA IF NOT EXISTS ops;
 CREATE SCHEMA IF NOT EXISTS analytics;
 CREATE SCHEMA IF NOT EXISTS admin;
+CREATE SCHEMA IF NOT EXISTS history;
 
 CREATE SEQUENCE IF NOT EXISTS chat.message_sequence AS bigint START WITH 1 INCREMENT BY 1 CACHE 100;
 CREATE SEQUENCE IF NOT EXISTS ops.sync_change_sequence AS bigint START WITH 1 INCREMENT BY 1 CACHE 100;

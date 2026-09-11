@@ -1,6 +1,6 @@
 /*
 OLGA Connect Release 1 - PostgreSQL full database setup
-Architecture baseline: Database Architecture and Table-Level Design v2.3
+Architecture baseline: Database Architecture and Table-Level Design v2.3 + auditability hardening v2.4
 Implementation baseline: MVP Architecture Implementation Guide v1.0
 Target: a new, empty PostgreSQL 17 database
 
@@ -10,8 +10,12 @@ seeding remains fail-closed until product and security approve it.
 -- ======================== SCHEMAS AND SEQUENCES ========================
 BEGIN;
 
+-- Serialize schema deployments even if two external pipelines are started.
+SELECT pg_advisory_xact_lock(hashtextextended('olga_schema_migration', 0));
+
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+CREATE EXTENSION IF NOT EXISTS temporal_tables;
 
 CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS iam;
@@ -26,6 +30,7 @@ CREATE SCHEMA IF NOT EXISTS moderation;
 CREATE SCHEMA IF NOT EXISTS ops;
 CREATE SCHEMA IF NOT EXISTS analytics;
 CREATE SCHEMA IF NOT EXISTS admin;
+CREATE SCHEMA IF NOT EXISTS history;
 
 CREATE SEQUENCE IF NOT EXISTS chat.message_sequence AS bigint START WITH 1 INCREMENT BY 1 CACHE 100;
 CREATE SEQUENCE IF NOT EXISTS ops.sync_change_sequence AS bigint START WITH 1 INCREMENT BY 1 CACHE 100;
@@ -94,9 +99,13 @@ CREATE TABLE IF NOT EXISTS iam.member_identity (
         provider_subject_ciphertext bytea NOT NULL, -- Encrypted normalized email/mobile or external subject.
         display_hint varchar(80) NULL, -- Masked support hint; never authoritative.
         is_primary boolean NOT NULL CONSTRAINT df_member_identity_is_primary DEFAULT (false), -- Primary sign-in identity flag.
+        status varchar(16) NOT NULL CONSTRAINT df_member_identity_status DEFAULT ('ACTIVE'), -- ACTIVE or REVOKED.
         verified_at timestamptz NULL, -- Verification completion.
         last_login_at timestamptz NULL, -- Security/account support signal.
+        revoked_at timestamptz NULL, -- Explicit identity disablement time.
         created_at timestamptz NOT NULL CONSTRAINT df_member_identity_created_at DEFAULT (CURRENT_TIMESTAMP), -- Creation time.
+        updated_at timestamptz NOT NULL CONSTRAINT df_member_identity_updated_at DEFAULT (CURRENT_TIMESTAMP), -- UTC last material update time.
+        row_version bigint NOT NULL DEFAULT 1, -- Optimistic concurrency token; never client supplied.
         CONSTRAINT pk_member_identity_ PRIMARY KEY (member_identity_id)
     );
 -- iam.permission: Controlled application permission catalog used by API authorization policies.
@@ -126,6 +135,7 @@ CREATE TABLE IF NOT EXISTS iam.role (
         name varchar(100) NOT NULL, -- Display name.
         description varchar(500) NULL, -- Scope and intended use.
         is_privileged boolean NOT NULL CONSTRAINT df_role_is_privileged DEFAULT (false), -- Requires elevated authentication and audit.
+        status varchar(16) NOT NULL CONSTRAINT df_role_status DEFAULT ('ACTIVE'), -- ACTIVE or RETIRED.
         created_at timestamptz NOT NULL CONSTRAINT df_role_created_at DEFAULT (CURRENT_TIMESTAMP), -- UTC creation time.
         updated_at timestamptz NOT NULL CONSTRAINT df_role_updated_at DEFAULT (CURRENT_TIMESTAMP), -- UTC last material update time.
         row_version bigint NOT NULL DEFAULT 1, -- Optimistic concurrency token; never client supplied.
@@ -342,6 +352,7 @@ CREATE TABLE IF NOT EXISTS event.venue (
         city varchar(120) NULL, -- City.
         coarse_geo_cell varchar(32) NULL, -- venue-level geohash/H3 cell; not member location.
         timezone_id varchar(64) NOT NULL, -- IANA/Windows mapping controlled by service.
+        status varchar(16) NOT NULL CONSTRAINT df_venue_status DEFAULT ('ACTIVE'), -- ACTIVE or RETIRED.
         created_at timestamptz NOT NULL CONSTRAINT df_venue_created_at DEFAULT (CURRENT_TIMESTAMP), -- UTC creation time.
         updated_at timestamptz NOT NULL CONSTRAINT df_venue_updated_at DEFAULT (CURRENT_TIMESTAMP), -- UTC last material update time.
         row_version bigint NOT NULL DEFAULT 1, -- Optimistic concurrency token; never client supplied.
@@ -513,6 +524,7 @@ CREATE TABLE IF NOT EXISTS chat.message (
         moderation_status varchar(24) NOT NULL CONSTRAINT df_message_moderation_status DEFAULT ('PENDING_OR_CLEAR'), -- Safety state.
         deleted_at timestamptz NULL, -- Logical removal time.
         created_at timestamptz NOT NULL CONSTRAINT df_message_created_at DEFAULT (CURRENT_TIMESTAMP), -- Authoritative send time.
+        updated_at timestamptz NOT NULL CONSTRAINT df_message_updated_at DEFAULT (CURRENT_TIMESTAMP), -- Last moderation/deletion change.
         row_version bigint NOT NULL DEFAULT 1, -- Concurrency token.
         CONSTRAINT pk_message_ PRIMARY KEY (message_id)
     );
@@ -699,6 +711,8 @@ CREATE TABLE IF NOT EXISTS nlp.nlp_model_version (
         status varchar(20) NOT NULL CONSTRAINT df_nlp_model_version_status DEFAULT ('CANDIDATE'), -- CANDIDATE, ACTIVE, RETIRED, ROLLED_BACK.
         activated_at timestamptz NULL, -- Promotion time.
         created_at timestamptz NOT NULL CONSTRAINT df_nlp_model_version_created_at DEFAULT (CURRENT_TIMESTAMP), -- Registration time.
+        updated_at timestamptz NOT NULL CONSTRAINT df_nlp_model_version_updated_at DEFAULT (CURRENT_TIMESTAMP), -- UTC last material update time.
+        row_version bigint NOT NULL DEFAULT 1, -- Optimistic concurrency token; never client supplied.
         CONSTRAINT pk_nlp_model_version_ PRIMARY KEY (model_version)
     );
 -- nlp.nlp_ranking_config: Versioned ranking weights, threshold and policy switches.
@@ -714,6 +728,9 @@ CREATE TABLE IF NOT EXISTS nlp.nlp_ranking_config (
         active_from timestamptz NOT NULL, -- Effective time.
         active_to timestamptz NULL, -- Retirement time.
         config_json jsonb NULL, -- Bounded extra rule settings.
+        created_at timestamptz NOT NULL CONSTRAINT df_nlp_ranking_config_created_at DEFAULT (CURRENT_TIMESTAMP), -- UTC creation time.
+        updated_at timestamptz NOT NULL CONSTRAINT df_nlp_ranking_config_updated_at DEFAULT (CURRENT_TIMESTAMP), -- UTC last material update time.
+        row_version bigint NOT NULL DEFAULT 1, -- Optimistic concurrency token; never client supplied.
         CONSTRAINT pk_nlp_ranking_config_ PRIMARY KEY (ranking_version)
     );
 -- nlp.nlp_processing_job: Intent embedding and re-embedding retry state.
@@ -958,13 +975,13 @@ CREATE TABLE IF NOT EXISTS ops.outbox_event (
 CREATE TABLE IF NOT EXISTS ops.idempotency_record (
         scope varchar(64) NOT NULL, -- API/operation scope.
         idempotency_key varchar(128) NOT NULL, -- Client key.
-        actor_id varchar(64) NOT NULL, -- Authenticated member/service.
+        actor_id varchar(64) NOT NULL, -- Authenticated member/service; part of the replay boundary.
         request_hash char(64) NOT NULL, -- Detect key reuse with different body.
         status_code smallint NULL, -- Cached response status.
         response_ref varchar(1000) NULL, -- Bounded response or resource reference.
         created_at timestamptz NOT NULL CONSTRAINT df_idempotency_record_created_at DEFAULT (CURRENT_TIMESTAMP), -- First request.
         expires_at timestamptz NOT NULL, -- Purge time.
-        CONSTRAINT pk_idempotency_record_ PRIMARY KEY (scope, idempotency_key)
+        CONSTRAINT pk_idempotency_record_ PRIMARY KEY (scope, actor_id, idempotency_key)
     );
 -- ops.background_job: Non-NLP background task lifecycle.
 CREATE TABLE IF NOT EXISTS ops.background_job (
@@ -1028,6 +1045,200 @@ BEGIN
     END LOOP;
 END;
 $$;
+
+-- ======================== AUDIT ATTRIBUTION AND TEMPORAL HISTORY ========================
+-- Database-sourced actor attribution for mutable API resources. Applications should set
+-- olga.actor_id after authenticating each request.
+CREATE OR REPLACE FUNCTION ops.set_audit_context(p_actor_id varchar(64))
+RETURNS void
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF p_actor_id IS NULL OR btrim(p_actor_id) = '' THEN
+        RAISE EXCEPTION 'Audit actor ID is required.' USING ERRCODE = '22023';
+    END IF;
+    PERFORM set_config('olga.actor_id', p_actor_id, true);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION ops.current_audit_actor_id()
+RETURNS varchar(64)
+LANGUAGE sql
+STABLE
+AS $function$
+    SELECT COALESCE(NULLIF(current_setting('olga.actor_id', true), ''), session_user)::varchar(64)
+$function$;
+
+CREATE OR REPLACE FUNCTION ops.set_audit_actor()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, ops
+AS $function$
+DECLARE
+    v_actor_id varchar(64) := ops.current_audit_actor_id();
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        -- Never trust audit identities supplied in an INSERT payload.
+        NEW.created_by := v_actor_id;
+        NEW.updated_by := v_actor_id;
+    ELSE
+        NEW.created_by := OLD.created_by;
+        NEW.updated_by := v_actor_id;
+        NEW.updated_at := CURRENT_TIMESTAMP;
+    END IF;
+    RETURN NEW;
+END;
+$function$;
+
+-- Add lifecycle support to the few reusable records that had no disable/retire state.
+ALTER TABLE iam.member_identity ADD COLUMN IF NOT EXISTS status varchar(16) NOT NULL DEFAULT 'ACTIVE';
+ALTER TABLE iam.member_identity ADD COLUMN IF NOT EXISTS revoked_at timestamptz NULL;
+ALTER TABLE iam.member_identity ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE iam.member_identity ADD COLUMN IF NOT EXISTS row_version bigint NOT NULL DEFAULT 1;
+ALTER TABLE iam.role ADD COLUMN IF NOT EXISTS status varchar(16) NOT NULL DEFAULT 'ACTIVE';
+ALTER TABLE event.venue ADD COLUMN IF NOT EXISTS status varchar(16) NOT NULL DEFAULT 'ACTIVE';
+ALTER TABLE chat.message ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE nlp.nlp_model_version ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE nlp.nlp_model_version ADD COLUMN IF NOT EXISTS row_version bigint NOT NULL DEFAULT 1;
+ALTER TABLE nlp.nlp_ranking_config ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE nlp.nlp_ranking_config ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE nlp.nlp_ranking_config ADD COLUMN IF NOT EXISTS row_version bigint NOT NULL DEFAULT 1;
+
+-- Audit actors may be members, administrators, services, or the database system; they are
+-- intentionally polymorphic rather than foreign keys to iam.member.
+ALTER TABLE nlp.match_suppression DROP CONSTRAINT IF EXISTS fk_match_suppression_created_by;
+ALTER TABLE moderation.content_rule DROP CONSTRAINT IF EXISTS fk_content_rule_created_by;
+
+-- Repair lifecycle checks from the prior baseline only when they omit documented states.
+DO $block$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'iam.member'::regclass AND conname = 'ck_member_status'
+          AND pg_get_constraintdef(oid) NOT LIKE '%ANONYMIZED%'
+    ) THEN
+        ALTER TABLE iam.member DROP CONSTRAINT ck_member_status;
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'core.member_profile'::regclass AND conname = 'ck_member_profile_profile_status'
+          AND pg_get_constraintdef(oid) NOT LIKE '%PENDING_REVIEW%'
+    ) THEN
+        ALTER TABLE core.member_profile DROP CONSTRAINT ck_member_profile_profile_status;
+    END IF;
+END;
+$block$;
+
+-- Every row_version-backed resource receives immutable creator attribution and a last-writer actor.
+-- UNKNOWN is used only when upgrading rows that predate actor capture.
+DO $block$
+DECLARE
+    target record;
+BEGIN
+    FOR target IN
+        SELECT DISTINCT table_schema, table_name
+        FROM information_schema.columns
+        WHERE (
+                column_name = 'row_version'
+                AND table_schema IN ('core','iam','consent','event','social','chat','storage','notification','nlp','moderation','ops')
+              )
+           OR (table_schema, table_name) IN (
+                ('nlp','nlp_model_version'),
+                ('nlp','nlp_ranking_config')
+              )
+    LOOP
+        EXECUTE format('ALTER TABLE %I.%I ADD COLUMN IF NOT EXISTS created_by varchar(64)', target.table_schema, target.table_name);
+        EXECUTE format('ALTER TABLE %I.%I ADD COLUMN IF NOT EXISTS updated_by varchar(64)', target.table_schema, target.table_name);
+
+        EXECUTE format(
+            'UPDATE %I.%I SET created_by = COALESCE(created_by, %L), updated_by = COALESCE(updated_by, created_by, %L) WHERE created_by IS NULL OR updated_by IS NULL',
+            target.table_schema, target.table_name, 'legacy_unknown', 'legacy_unknown'
+        );
+
+        EXECUTE format('ALTER TABLE %I.%I ALTER COLUMN created_by SET DEFAULT ops.current_audit_actor_id()', target.table_schema, target.table_name);
+        EXECUTE format('ALTER TABLE %I.%I ALTER COLUMN updated_by SET DEFAULT ops.current_audit_actor_id()', target.table_schema, target.table_name);
+        EXECUTE format('ALTER TABLE %I.%I ALTER COLUMN created_by SET NOT NULL', target.table_schema, target.table_name);
+        EXECUTE format('ALTER TABLE %I.%I ALTER COLUMN updated_by SET NOT NULL', target.table_schema, target.table_name);
+
+        EXECUTE format('DROP TRIGGER IF EXISTS set_audit_actor ON %I.%I', target.table_schema, target.table_name);
+        EXECUTE format(
+            'CREATE TRIGGER set_audit_actor BEFORE INSERT OR UPDATE ON %I.%I FOR EACH ROW EXECUTE FUNCTION ops.set_audit_actor()',
+            target.table_schema, target.table_name
+        );
+
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns c
+            WHERE c.table_schema = target.table_schema AND c.table_name = target.table_name AND c.column_name = 'row_version'
+        ) THEN
+            EXECUTE format('DROP TRIGGER IF EXISTS set_row_version ON %I.%I', target.table_schema, target.table_name);
+            EXECUTE format(
+                'CREATE TRIGGER set_row_version BEFORE UPDATE ON %I.%I FOR EACH ROW EXECUTE FUNCTION ops.set_row_version()',
+                target.table_schema, target.table_name
+            );
+        END IF;
+    END LOOP;
+END;
+$block$;
+
+-- PostgreSQL 17 has no native SQL Server-style FOR SYSTEM_TIME syntax. Azure Flexible Server
+-- supports temporal_tables, which archives OLD rows with a tstzrange system period.
+-- History is intentionally limited to low-volume reference/configuration tables; copying member
+-- content, identity ciphertext, messages or presence would conflict with privacy and retention.
+-- Run versioning with the migration owner so runtime roles never receive direct history-table writes.
+ALTER FUNCTION versioning() SECURITY DEFINER;
+ALTER FUNCTION versioning() SET search_path = pg_catalog, public;
+REVOKE EXECUTE ON FUNCTION set_system_time(timestamptz) FROM PUBLIC;
+
+DO $block$
+DECLARE
+    target record;
+    history_table name;
+BEGIN
+    FOR target IN
+        SELECT * FROM (VALUES
+            ('iam','permission','permission_code'),
+            ('iam','role','role_code'),
+            ('core','sector','sector_code'),
+            ('consent','consent_policy','policy_id'),
+            ('event','venue','venue_id'),
+            ('event','event_matching_policy','event_matching_policy_id'),
+            ('notification','notification_policy','notification_policy_id'),
+            ('nlp','nlp_model_version','model_version'),
+            ('nlp','nlp_ranking_config','ranking_version'),
+            ('moderation','content_rule','content_rule_id'),
+            ('ops','retention_policy','retention_policy_id')
+        ) AS configured(table_schema, table_name, key_column)
+    LOOP
+        history_table := (target.table_schema || '_' || target.table_name)::name;
+        EXECUTE format(
+            'ALTER TABLE %I.%I ADD COLUMN IF NOT EXISTS sys_period tstzrange NOT NULL DEFAULT tstzrange(CURRENT_TIMESTAMP, NULL, ''[)'')',
+            target.table_schema, target.table_name
+        );
+        EXECUTE format(
+            'CREATE TABLE IF NOT EXISTS history.%I (LIKE %I.%I INCLUDING DEFAULTS)',
+            history_table, target.table_schema, target.table_name
+        );
+        EXECUTE format(
+            'CREATE INDEX IF NOT EXISTS %I ON history.%I (%I, lower(sys_period) DESC)',
+            ('ix_' || history_table || '_key_period')::name, history_table, target.key_column
+        );
+        EXECUTE format(
+            'CREATE INDEX IF NOT EXISTS %I ON history.%I USING gist (sys_period)',
+            ('ix_' || history_table || '_sys_period')::name, history_table
+        );
+        EXECUTE format('DROP TRIGGER IF EXISTS versioning_history ON %I.%I', target.table_schema, target.table_name);
+        EXECUTE format(
+            'CREATE TRIGGER versioning_history BEFORE INSERT OR UPDATE OR DELETE ON %I.%I FOR EACH ROW EXECUTE FUNCTION versioning(%L, %L, true)',
+            target.table_schema, target.table_name, 'sys_period', 'history.' || quote_ident(history_table)
+        );
+        EXECUTE format(
+            'CREATE OR REPLACE VIEW history.%I AS SELECT * FROM %I.%I UNION ALL SELECT * FROM history.%I',
+            (history_table || '_all')::name, target.table_schema, target.table_name, history_table
+        );
+    END LOOP;
+END;
+$block$;
 
 -- ======================== CONSTRAINTS AND INDEXES ========================
 SELECT ops.add_constraint_if_missing('iam', 'member', 'fk_member_community_id', $constraint$FOREIGN KEY (community_id) REFERENCES core.community (community_id)$constraint$);
@@ -1107,7 +1318,6 @@ SELECT ops.add_constraint_if_missing('nlp', 'nlp_feedback', 'fk_nlp_feedback_req
 SELECT ops.add_constraint_if_missing('nlp', 'nlp_feedback', 'fk_nlp_feedback_candidate_id', $constraint$FOREIGN KEY (candidate_id) REFERENCES iam.member (member_id)$constraint$);
 SELECT ops.add_constraint_if_missing('nlp', 'match_suppression', 'fk_match_suppression_member_id', $constraint$FOREIGN KEY (member_id) REFERENCES iam.member (member_id)$constraint$);
 SELECT ops.add_constraint_if_missing('nlp', 'match_suppression', 'fk_match_suppression_intent_id', $constraint$FOREIGN KEY (intent_id) REFERENCES nlp.nlp_intent (intent_id)$constraint$);
-SELECT ops.add_constraint_if_missing('nlp', 'match_suppression', 'fk_match_suppression_created_by', $constraint$FOREIGN KEY (created_by) REFERENCES iam.member (member_id)$constraint$);
 SELECT ops.add_constraint_if_missing('nlp', 'evaluation_dataset', 'fk_evaluation_dataset_approved_by', $constraint$FOREIGN KEY (approved_by) REFERENCES iam.member (member_id)$constraint$);
 SELECT ops.add_constraint_if_missing('nlp', 'evaluation_pair', 'fk_evaluation_pair_dataset_id', $constraint$FOREIGN KEY (dataset_id) REFERENCES nlp.evaluation_dataset (dataset_id)$constraint$);
 SELECT ops.add_constraint_if_missing('nlp', 'evaluation_run', 'fk_evaluation_run_dataset_id', $constraint$FOREIGN KEY (dataset_id) REFERENCES nlp.evaluation_dataset (dataset_id)$constraint$);
@@ -1117,12 +1327,32 @@ SELECT ops.add_constraint_if_missing('moderation', 'moderation_case', 'fk_modera
 SELECT ops.add_constraint_if_missing('moderation', 'moderation_case', 'fk_moderation_case_assigned_to', $constraint$FOREIGN KEY (assigned_to) REFERENCES iam.member (member_id)$constraint$);
 SELECT ops.add_constraint_if_missing('moderation', 'moderation_action', 'fk_moderation_action_moderation_case_id', $constraint$FOREIGN KEY (moderation_case_id) REFERENCES moderation.moderation_case (moderation_case_id)$constraint$);
 SELECT ops.add_constraint_if_missing('moderation', 'moderation_action', 'fk_moderation_action_actor_member_id', $constraint$FOREIGN KEY (actor_member_id) REFERENCES iam.member (member_id)$constraint$);
-SELECT ops.add_constraint_if_missing('moderation', 'content_rule', 'fk_content_rule_created_by', $constraint$FOREIGN KEY (created_by) REFERENCES iam.member (member_id)$constraint$);
 SELECT ops.add_constraint_if_missing('analytics', 'product_event', 'fk_product_event_community_id', $constraint$FOREIGN KEY (community_id) REFERENCES core.community (community_id)$constraint$);
-SELECT ops.add_constraint_if_missing('iam', 'member', 'ck_member_status', $constraint$CHECK (status IN ('PENDING','ACTIVE','SUSPENDED','DELETED'))$constraint$);
+
+-- Scope idempotency keys by authenticated actor. The earlier two-column key was
+-- unnecessarily global and could make unrelated members collide on the same client key.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'ops.idempotency_record'::regclass
+          AND conname = 'pk_idempotency_record_'
+          AND pg_get_constraintdef(oid) <> 'PRIMARY KEY (scope, actor_id, idempotency_key)'
+    ) THEN
+        ALTER TABLE ops.idempotency_record DROP CONSTRAINT pk_idempotency_record_;
+        ALTER TABLE ops.idempotency_record
+            ADD CONSTRAINT pk_idempotency_record_ PRIMARY KEY (scope, actor_id, idempotency_key);
+    END IF;
+END;
+$$;
+
+SELECT ops.add_constraint_if_missing('iam', 'member', 'ck_member_status', $constraint$CHECK (status IN ('PENDING','ACTIVE','SUSPENDED','ANONYMIZED','DELETED'))$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'member_identity', 'ck_member_identity_status', $constraint$CHECK (status IN ('ACTIVE','REVOKED'))$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'member_identity', 'ck_member_identity_revocation', $constraint$CHECK ((status = 'REVOKED') = (revoked_at IS NOT NULL))$constraint$);
+SELECT ops.add_constraint_if_missing('iam', 'role', 'ck_role_status', $constraint$CHECK (status IN ('ACTIVE','RETIRED'))$constraint$);
 SELECT ops.add_constraint_if_missing('iam', 'member_device', 'ck_member_device_platform', $constraint$CHECK (platform IN ('IOS','ANDROID'))$constraint$);
 SELECT ops.add_constraint_if_missing('iam', 'member_device', 'ck_member_device_status', $constraint$CHECK (status IN ('ACTIVE','REVOKED'))$constraint$);
-SELECT ops.add_constraint_if_missing('core', 'member_profile', 'ck_member_profile_profile_status', $constraint$CHECK (profile_status IN ('DRAFT','ACTIVE','HIDDEN'))$constraint$);
+SELECT ops.add_constraint_if_missing('core', 'member_profile', 'ck_member_profile_profile_status', $constraint$CHECK (profile_status IN ('DRAFT','PENDING_REVIEW','ACTIVE','HIDDEN'))$constraint$);
 SELECT ops.add_constraint_if_missing('core', 'member_profile', 'ck_member_profile_visibility', $constraint$CHECK (visibility IN ('PUBLIC','MEMBERS','CONNECTED','HIDDEN'))$constraint$);
 SELECT ops.add_constraint_if_missing('consent', 'member_consent', 'ck_member_consent_decision', $constraint$CHECK (decision IN ('GRANTED','DENIED','WITHDRAWN'))$constraint$);
 SELECT ops.add_constraint_if_missing('event', 'event', 'ck_event_status', $constraint$CHECK (status IN ('DRAFT','PUBLISHED','ACTIVE','COMPLETED','CANCELLED'))$constraint$);
@@ -1130,10 +1360,14 @@ SELECT ops.add_constraint_if_missing('event', 'event_matching_policy', 'ck_event
 SELECT ops.add_constraint_if_missing('event', 'event_matching_policy', 'ck_event_matching_policy_proximity_mode', $constraint$CHECK (proximity_mode IN ('NONE','VENUE','COARSE_CELL'))$constraint$);
 SELECT ops.add_constraint_if_missing('event', 'event_registration', 'ck_event_registration_status', $constraint$CHECK (status IN ('INVITED','REGISTERED','CHECKED_IN','CANCELLED'))$constraint$);
 SELECT ops.add_constraint_if_missing('event', 'live_mode_session', 'ck_live_mode_session_status', $constraint$CHECK (status IN ('ACTIVE','DISABLED','EXPIRED'))$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'live_mode_session', 'ck_live_mode_session_dates', $constraint$CHECK (active_until > activated_at AND (disabled_at IS NULL OR disabled_at >= activated_at))$constraint$);
+SELECT ops.add_constraint_if_missing('event', 'venue', 'ck_venue_status', $constraint$CHECK (status IN ('ACTIVE','RETIRED'))$constraint$);
 SELECT ops.add_constraint_if_missing('social', 'connection_request', 'ck_connection_request_status', $constraint$CHECK (status IN ('PENDING','ACCEPTED','DECLINED','WITHDRAWN','EXPIRED'))$constraint$);
 SELECT ops.add_constraint_if_missing('social', 'connection', 'ck_connection_status', $constraint$CHECK (status IN ('ACTIVE','DISCONNECTED'))$constraint$);
 SELECT ops.add_constraint_if_missing('chat', 'conversation', 'ck_conversation_status', $constraint$CHECK (status IN ('ACTIVE','CLOSED','RESTRICTED'))$constraint$);
 SELECT ops.add_constraint_if_missing('chat', 'message', 'ck_message_message_type', $constraint$CHECK (message_type IN ('TEXT','FILE','SYSTEM'))$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'conversation_participant', 'ck_conversation_participant_dates', $constraint$CHECK (left_at IS NULL OR left_at >= joined_at)$constraint$);
+SELECT ops.add_constraint_if_missing('chat', 'message_receipt', 'ck_message_receipt_dates', $constraint$CHECK ((delivered_at IS NOT NULL OR read_at IS NOT NULL) AND (read_at IS NULL OR (delivered_at IS NOT NULL AND read_at >= delivered_at)))$constraint$);
 SELECT ops.add_constraint_if_missing('notification', 'notification_policy', 'ck_notification_policy_channel', $constraint$CHECK (channel IN ('PUSH','EMAIL','IN_APP'))$constraint$);
 SELECT ops.add_constraint_if_missing('notification', 'notification_policy', 'ck_notification_policy_status', $constraint$CHECK (status IN ('DRAFT','ACTIVE','RETIRED'))$constraint$);
 SELECT ops.add_constraint_if_missing('notification', 'notification_policy', 'ck_notification_policy_quiet_hours_behavior', $constraint$CHECK (quiet_hours_behavior IN ('DEFER','SUPPRESS','BYPASS'))$constraint$);
@@ -1168,6 +1402,7 @@ SELECT ops.add_constraint_if_missing('notification', 'notification_delivery_atte
 SELECT ops.add_constraint_if_missing('nlp', 'nlp_ranking_config', 'ck_nlp_ranking_config_weights', $constraint$CHECK (semantic_weight BETWEEN 0 AND 1 AND category_weight BETWEEN 0 AND 1 AND industry_weight BETWEEN 0 AND 1 AND geography_weight BETWEEN 0 AND 1 AND freshness_weight BETWEEN 0 AND 1 AND event_weight BETWEEN 0 AND 1 AND threshold BETWEEN 0 AND 1)$constraint$);
 SELECT ops.add_constraint_if_missing('nlp', 'match_request', 'ck_match_request_limit', $constraint$CHECK (requested_limit BETWEEN 3 AND 7)$constraint$);
 SELECT ops.add_constraint_if_missing('nlp', 'nlp_match_result', 'ck_nlp_match_result_scores', $constraint$CHECK (semantic_score BETWEEN 0 AND 1 AND (reciprocal_score IS NULL OR reciprocal_score BETWEEN 0 AND 1) AND final_score BETWEEN 0 AND 1 AND rank > 0)$constraint$);
+SELECT ops.add_constraint_if_missing('nlp', 'match_suppression', 'ck_match_suppression_target', $constraint$CHECK ((member_id IS NOT NULL OR intent_id IS NOT NULL OR context_id IS NOT NULL) AND (ends_at IS NULL OR ends_at > starts_at))$constraint$);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_community_name ON core.community (name);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_member_identity_provider_subject_hash ON iam.member_identity (provider, provider_subject_hash);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_member_identity_primary ON iam.member_identity (member_id) WHERE is_primary IS TRUE;
@@ -1273,6 +1508,7 @@ SELECT ops.add_constraint_if_missing('storage', 'file_asset', 'ck_file_asset_cla
 SELECT ops.add_constraint_if_missing('storage', 'file_asset', 'ck_file_asset_lifecycle', $constraint$CHECK (size_bytes >= 0 AND scan_status IN ('PENDING','CLEAN','REJECTED','ERROR') AND lifecycle_status IN ('UPLOADING','AVAILABLE','QUARANTINED','DELETED','EXPIRED') AND (lifecycle_status <> 'AVAILABLE' OR scan_status = 'CLEAN') AND (lifecycle_status NOT IN ('DELETED','EXPIRED') OR deleted_at IS NOT NULL))$constraint$);
 SELECT ops.add_constraint_if_missing('storage', 'file_asset_link', 'ck_file_asset_link_values', $constraint$CHECK (resource_type IN ('MESSAGE','MEMBER_VERIFICATION','PRIVACY_REQUEST','EVALUATION_RUN') AND relationship_type IN ('PRIMARY','EVIDENCE','RESULT','REPORT'))$constraint$);
 SELECT ops.add_constraint_if_missing('ops', 'sync_change', 'ck_sync_change_values', $constraint$CHECK (change_type IN ('UPSERT','DELETE') AND resource_type IN ('PROFILE','MATCH','REQUEST','CONVERSATION','MESSAGE','NOTIFICATION') AND expires_at > occurred_at)$constraint$);
+SELECT ops.add_constraint_if_missing('ops', 'idempotency_record', 'ck_idempotency_record_completion', $constraint$CHECK (expires_at > created_at AND (status_code IS NULL OR status_code BETWEEN 100 AND 599) AND ((status_code IS NULL) = (response_ref IS NULL)))$constraint$);
 SELECT ops.add_constraint_if_missing('ops', 'retention_policy', 'ck_retention_policy_values', $constraint$CHECK (policy_version > 0 AND retention_days >= 0 AND status IN ('DRAFT','ACTIVE','RETIRED') AND disposition_action IN ('DELETE','ANONYMIZE','ARCHIVE') AND (effective_to IS NULL OR effective_to > effective_from))$constraint$);
 SELECT ops.add_constraint_if_missing('ops', 'retention_execution', 'ck_retention_execution_values', $constraint$CHECK (scope_end > scope_start AND status IN ('RUNNING','SUCCEEDED','PARTIAL','FAILED') AND examined_count >= 0 AND disposed_count >= 0 AND skipped_hold_count >= 0 AND disposed_count + skipped_hold_count <= examined_count AND (status = 'RUNNING' OR completed_at IS NOT NULL))$constraint$);
 -- v2.3 lookup, uniqueness and worker access paths.
@@ -1315,6 +1551,8 @@ CREATE INDEX IF NOT EXISTS ix_member_verification_member_id_status ON core.membe
 CREATE INDEX IF NOT EXISTS ix_member_verification_status_created_at ON core.member_verification (status, created_at);
 CREATE INDEX IF NOT EXISTS ix_member_status_updated_at ON iam.member (status, updated_at);
 CREATE INDEX IF NOT EXISTS ix_member_identity_member_id_is_primary ON iam.member_identity (member_id, is_primary);
+CREATE INDEX IF NOT EXISTS ix_member_identity_member_id_status ON iam.member_identity (member_id, status);
+CREATE INDEX IF NOT EXISTS ix_role_status ON iam.role (status);
 CREATE INDEX IF NOT EXISTS ix_member_role_role_code_expires_at ON iam.member_role (role_code, expires_at);
 CREATE INDEX IF NOT EXISTS ix_member_device_member_id_status ON iam.member_device (member_id, status);
 CREATE INDEX IF NOT EXISTS ix_member_device_last_seen_at ON iam.member_device (last_seen_at);
@@ -1324,6 +1562,7 @@ CREATE INDEX IF NOT EXISTS ix_member_consent_policy_id_decision ON consent.membe
 CREATE INDEX IF NOT EXISTS ix_privacy_request_status_due_at ON consent.privacy_request (status, due_at);
 CREATE INDEX IF NOT EXISTS ix_privacy_request_member_id_created_at ON consent.privacy_request (member_id, created_at);
 CREATE INDEX IF NOT EXISTS ix_venue_country_code_region_city ON event.venue (country_code, region, city);
+CREATE INDEX IF NOT EXISTS ix_venue_status_country_code_region_city ON event.venue (status, country_code, region, city);
 CREATE INDEX IF NOT EXISTS ix_event_venue_id_starts_at ON event.event (venue_id, starts_at);
 CREATE INDEX IF NOT EXISTS ix_event_matching_policy_status_effective_from_effective_to ON event.event_matching_policy (status, effective_from, effective_to);
 CREATE INDEX IF NOT EXISTS ix_event_registration_member_id_status ON event.event_registration (member_id, status);
@@ -1397,6 +1636,372 @@ DROP TRIGGER IF EXISTS enforce_file_asset_link_resource ON storage.file_asset_li
 CREATE TRIGGER enforce_file_asset_link_resource
 BEFORE INSERT OR UPDATE ON storage.file_asset_link
 FOR EACH ROW EXECUTE FUNCTION storage.enforce_file_asset_link_resource();
+
+-- Active Live Mode sessions must be event-bounded and backed by the same member's
+-- latest effective, unwithdrawn LIVE_MODE grant. This prevents an unrelated consent
+-- row from satisfying the foreign key and makes session creation fail closed.
+CREATE OR REPLACE FUNCTION event.enforce_live_mode_session_consent()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, event, iam, consent
+AS $$
+DECLARE
+    v_event_ends_at timestamptz;
+BEGIN
+    IF NEW.status <> 'ACTIVE' THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT e.ends_at
+    INTO v_event_ends_at
+    FROM event.event e
+    JOIN iam.member m
+      ON m.member_id = NEW.member_id
+     AND m.community_id = e.community_id
+     AND m.status = 'ACTIVE'
+    WHERE e.event_id = NEW.event_id
+      AND e.status = 'ACTIVE'
+      AND e.live_mode_enabled
+      AND CURRENT_TIMESTAMP >= e.starts_at
+      AND CURRENT_TIMESTAMP < e.ends_at;
+
+    IF v_event_ends_at IS NULL OR NEW.active_until > v_event_ends_at
+       OR NEW.active_until <= CURRENT_TIMESTAMP THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Active Live Mode session requires an active same-community event and an event-bounded future expiry.';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM consent.member_consent mc
+        JOIN consent.consent_policy cp ON cp.policy_id = mc.policy_id
+        WHERE mc.member_consent_id = NEW.consent_record_id
+          AND mc.member_id = NEW.member_id
+          AND mc.decision = 'GRANTED'
+          AND mc.withdrawn_at IS NULL
+          AND cp.purpose_code = 'LIVE_MODE'
+          AND cp.effective_from <= CURRENT_TIMESTAMP
+          AND cp.retired_at IS NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM consent.member_consent newer
+              JOIN consent.consent_policy newer_policy ON newer_policy.policy_id = newer.policy_id
+              WHERE newer.member_id = mc.member_id
+                AND newer_policy.purpose_code = 'LIVE_MODE'
+                AND newer_policy.effective_from <= CURRENT_TIMESTAMP
+                AND newer_policy.retired_at IS NULL
+                AND (newer.captured_at, newer.member_consent_id) > (mc.captured_at, mc.member_consent_id)
+          )
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Active Live Mode session requires the member''s latest effective LIVE_MODE grant.';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS enforce_live_mode_session_consent ON event.live_mode_session;
+CREATE TRIGGER enforce_live_mode_session_consent
+BEFORE INSERT OR UPDATE ON event.live_mode_session
+FOR EACH ROW EXECUTE FUNCTION event.enforce_live_mode_session_consent();
+
+-- When suppression dimensions are combined, they must describe the same intent.
+CREATE OR REPLACE FUNCTION nlp.enforce_match_suppression_target()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.intent_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1
+        FROM nlp.nlp_intent i
+        WHERE i.intent_id = NEW.intent_id
+          AND (NEW.member_id IS NULL OR i.member_id = NEW.member_id)
+          AND (NEW.context_id IS NULL OR i.context_id = NEW.context_id)
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Match suppression member, intent and context targets are inconsistent.';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS enforce_match_suppression_target ON nlp.match_suppression;
+CREATE TRIGGER enforce_match_suppression_target
+BEFORE INSERT OR UPDATE ON nlp.match_suppression
+FOR EACH ROW EXECUTE FUNCTION nlp.enforce_match_suppression_target();
+
+-- A connection must represent exactly the two members from its accepted request.
+CREATE OR REPLACE FUNCTION social.enforce_connection_request_pair()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_sender_member_id varchar(64);
+    v_recipient_member_id varchar(64);
+BEGIN
+    SELECT sender_member_id, recipient_member_id
+    INTO v_sender_member_id, v_recipient_member_id
+    FROM social.connection_request
+    WHERE connection_request_id = NEW.accepted_request_id
+      AND status = 'ACCEPTED';
+
+    IF v_sender_member_id IS NULL
+       OR NEW.member_low_id <> LEAST(v_sender_member_id, v_recipient_member_id)
+       OR NEW.member_high_id <> GREATEST(v_sender_member_id, v_recipient_member_id) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Connection members must exactly match the accepted connection request.';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS enforce_connection_request_pair ON social.connection;
+CREATE TRIGGER enforce_connection_request_pair
+BEFORE INSERT OR UPDATE OF member_low_id, member_high_id, accepted_request_id ON social.connection
+FOR EACH ROW EXECUTE FUNCTION social.enforce_connection_request_pair();
+
+CREATE OR REPLACE FUNCTION social.validate_accepted_request_connection()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_connection_request_id varchar(64);
+BEGIN
+    v_connection_request_id := CASE
+        WHEN TG_TABLE_NAME = 'connection_request' THEN
+            CASE WHEN TG_OP = 'DELETE' THEN OLD.connection_request_id ELSE NEW.connection_request_id END
+        ELSE
+            CASE WHEN TG_OP = 'DELETE' THEN OLD.accepted_request_id ELSE NEW.accepted_request_id END
+    END;
+
+    IF EXISTS (
+        SELECT 1 FROM social.connection_request cr
+        WHERE cr.connection_request_id = v_connection_request_id AND cr.status = 'ACCEPTED'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM social.connection c
+        WHERE c.accepted_request_id = v_connection_request_id
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'An accepted connection request must have its canonical connection in the same transaction.';
+    END IF;
+    RETURN NULL;
+END;
+$$;
+DROP TRIGGER IF EXISTS validate_accepted_request_connection_on_request ON social.connection_request;
+CREATE CONSTRAINT TRIGGER validate_accepted_request_connection_on_request
+AFTER INSERT OR UPDATE OR DELETE ON social.connection_request
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION social.validate_accepted_request_connection();
+DROP TRIGGER IF EXISTS validate_accepted_request_connection_on_connection ON social.connection;
+CREATE CONSTRAINT TRIGGER validate_accepted_request_connection_on_connection
+AFTER INSERT OR UPDATE OR DELETE ON social.connection
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION social.validate_accepted_request_connection();
+
+-- Participant rows may contain only the two members of the underlying connection.
+-- Read cursors must point into the same conversation and may never move backwards.
+CREATE OR REPLACE FUNCTION chat.enforce_conversation_participant()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, chat, social
+AS $$
+DECLARE
+    v_member_low_id varchar(64);
+    v_member_high_id varchar(64);
+    v_new_sequence bigint;
+    v_old_sequence bigint;
+BEGIN
+    IF TG_OP = 'UPDATE' AND (
+        NEW.conversation_id IS DISTINCT FROM OLD.conversation_id
+        OR NEW.member_id IS DISTINCT FROM OLD.member_id
+        OR NEW.joined_at IS DISTINCT FROM OLD.joined_at
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Conversation participant identity and join time are immutable.';
+    END IF;
+
+    SELECT cn.member_low_id, cn.member_high_id
+    INTO v_member_low_id, v_member_high_id
+    FROM chat.conversation c
+    JOIN social.connection cn ON cn.connection_id = c.connection_id
+    WHERE c.conversation_id = NEW.conversation_id;
+
+    IF v_member_low_id IS NULL OR NEW.member_id NOT IN (v_member_low_id, v_member_high_id) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Conversation participant must be a member of the underlying connection.';
+    END IF;
+
+    IF NEW.last_read_message_id IS NOT NULL THEN
+        SELECT server_sequence INTO v_new_sequence
+        FROM chat.message
+        WHERE message_id = NEW.last_read_message_id
+          AND conversation_id = NEW.conversation_id;
+        IF v_new_sequence IS NULL THEN
+            RAISE EXCEPTION USING ERRCODE = '23514',
+                MESSAGE = 'Last-read message must belong to the participant conversation.';
+        END IF;
+        IF TG_OP = 'UPDATE' AND OLD.last_read_message_id IS NOT NULL
+           AND NEW.last_read_message_id IS DISTINCT FROM OLD.last_read_message_id THEN
+            SELECT server_sequence INTO v_old_sequence
+            FROM chat.message
+            WHERE message_id = OLD.last_read_message_id
+              AND conversation_id = OLD.conversation_id;
+            IF v_old_sequence IS NULL OR v_new_sequence < v_old_sequence THEN
+                RAISE EXCEPTION USING ERRCODE = '23514',
+                    MESSAGE = 'Last-read message cursor cannot move backwards.';
+            END IF;
+        END IF;
+    ELSIF TG_OP = 'UPDATE' AND OLD.last_read_message_id IS NOT NULL THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Last-read message cursor cannot be cleared.';
+    END IF;
+
+    IF TG_OP = 'UPDATE' AND OLD.left_at IS NOT NULL
+       AND NEW.left_at IS DISTINCT FROM OLD.left_at THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Participant leave time is immutable once set.';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS enforce_conversation_participant ON chat.conversation_participant;
+CREATE TRIGGER enforce_conversation_participant
+BEFORE INSERT OR UPDATE ON chat.conversation_participant
+FOR EACH ROW EXECUTE FUNCTION chat.enforce_conversation_participant();
+
+-- Deferred validation permits the two participants to be inserted in separate statements
+-- while guaranteeing that every conversation has exactly the connection pair at commit.
+CREATE OR REPLACE FUNCTION chat.validate_conversation_participant_set()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, chat, social
+AS $$
+DECLARE
+    v_conversation_id varchar(64);
+    v_member_low_id varchar(64);
+    v_member_high_id varchar(64);
+    v_participant_count int;
+BEGIN
+    v_conversation_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.conversation_id ELSE NEW.conversation_id END;
+
+    SELECT cn.member_low_id, cn.member_high_id
+    INTO v_member_low_id, v_member_high_id
+    FROM chat.conversation c
+    JOIN social.connection cn ON cn.connection_id = c.connection_id
+    WHERE c.conversation_id = v_conversation_id;
+
+    IF NOT FOUND THEN
+        RETURN NULL;
+    END IF;
+
+    SELECT count(*) INTO v_participant_count
+    FROM chat.conversation_participant cp
+    WHERE cp.conversation_id = v_conversation_id
+      AND cp.member_id IN (v_member_low_id, v_member_high_id);
+
+    IF v_participant_count <> 2 OR EXISTS (
+        SELECT 1 FROM chat.conversation_participant cp
+        WHERE cp.conversation_id = v_conversation_id
+          AND cp.member_id NOT IN (v_member_low_id, v_member_high_id)
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Conversation must contain exactly the two members of its connection.';
+    END IF;
+    RETURN NULL;
+END;
+$$;
+DROP TRIGGER IF EXISTS validate_conversation_participant_set_on_conversation ON chat.conversation;
+CREATE CONSTRAINT TRIGGER validate_conversation_participant_set_on_conversation
+AFTER INSERT OR UPDATE ON chat.conversation
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION chat.validate_conversation_participant_set();
+DROP TRIGGER IF EXISTS validate_conversation_participant_set_on_participant ON chat.conversation_participant;
+CREATE CONSTRAINT TRIGGER validate_conversation_participant_set_on_participant
+AFTER INSERT OR UPDATE OR DELETE ON chat.conversation_participant
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION chat.validate_conversation_participant_set();
+
+-- Direct message writes cannot bypass participant/connection/block authorization.
+CREATE OR REPLACE FUNCTION chat.enforce_message_sender()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' AND (
+        NEW.message_id IS DISTINCT FROM OLD.message_id
+        OR NEW.conversation_id IS DISTINCT FROM OLD.conversation_id
+        OR NEW.sender_member_id IS DISTINCT FROM OLD.sender_member_id
+        OR NEW.server_sequence IS DISTINCT FROM OLD.server_sequence
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Message identity, conversation, sender and server sequence are immutable.';
+    END IF;
+    IF TG_OP = 'INSERT' AND NOT EXISTS (
+        SELECT 1 FROM chat.vw_authorized_conversation authorized
+        WHERE authorized.conversation_id = NEW.conversation_id
+          AND authorized.member_id = NEW.sender_member_id
+          AND authorized.can_send
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '42501',
+            MESSAGE = 'Message sender is not authorized for the conversation.';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS enforce_message_sender ON chat.message;
+CREATE TRIGGER enforce_message_sender
+BEFORE INSERT OR UPDATE ON chat.message
+FOR EACH ROW EXECUTE FUNCTION chat.enforce_message_sender();
+
+-- Receipts belong to the non-sending participant and first-delivered/read timestamps
+-- are monotonic, immutable evidence.
+CREATE OR REPLACE FUNCTION chat.enforce_message_receipt()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_conversation_id varchar(64);
+    v_sender_member_id varchar(64);
+BEGIN
+    IF TG_OP = 'UPDATE' AND (
+        NEW.message_id IS DISTINCT FROM OLD.message_id
+        OR NEW.member_id IS DISTINCT FROM OLD.member_id
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'Message receipt identity is immutable.';
+    END IF;
+
+    SELECT conversation_id, sender_member_id
+    INTO v_conversation_id, v_sender_member_id
+    FROM chat.message
+    WHERE message_id = NEW.message_id;
+
+    IF v_conversation_id IS NULL OR NEW.member_id = v_sender_member_id OR NOT EXISTS (
+        SELECT 1 FROM chat.conversation_participant cp
+        WHERE cp.conversation_id = v_conversation_id AND cp.member_id = NEW.member_id
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Message receipt must belong to the non-sending conversation participant.';
+    END IF;
+
+    IF NEW.read_at IS NOT NULL AND (NEW.delivered_at IS NULL OR NEW.read_at < NEW.delivered_at) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'Read time cannot precede delivery time.';
+    END IF;
+    IF TG_OP = 'UPDATE' AND (
+        (OLD.delivered_at IS NOT NULL AND NEW.delivered_at IS DISTINCT FROM OLD.delivered_at)
+        OR (OLD.read_at IS NOT NULL AND NEW.read_at IS DISTINCT FROM OLD.read_at)
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            MESSAGE = 'Delivered and read timestamps are immutable once recorded.';
+    END IF;
+    NEW.updated_at := CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS enforce_message_receipt ON chat.message_receipt;
+CREATE TRIGGER enforce_message_receipt
+BEFORE INSERT OR UPDATE ON chat.message_receipt
+FOR EACH ROW EXECUTE FUNCTION chat.enforce_message_receipt();
 
 -- A privacy request is terminal only after its explicit domain work is terminal and evidenced.
 CREATE OR REPLACE FUNCTION consent.enforce_privacy_request_completion()
@@ -1478,7 +2083,7 @@ CREATE OR REPLACE VIEW nlp.vw_member_context_eligibility
 AS
 WITH latest_consent AS MATERIALIZED (
     SELECT DISTINCT ON (mc.member_id, cp.purpose_code)
-           mc.member_id, cp.purpose_code, mc.decision, mc.withdrawn_at
+           mc.member_consent_id, mc.member_id, cp.purpose_code, mc.decision, mc.withdrawn_at
     FROM consent.member_consent mc
     JOIN consent.consent_policy cp ON cp.policy_id = mc.policy_id
     WHERE cp.effective_from <= CURRENT_TIMESTAMP AND cp.retired_at IS NULL
@@ -1492,18 +2097,30 @@ WITH latest_consent AS MATERIALIZED (
     FROM event.event_matching_policy p
     WHERE p.status = 'ACTIVE' AND p.effective_from <= CURRENT_TIMESTAMP
       AND (p.effective_to IS NULL OR p.effective_to > CURRENT_TIMESTAMP)
+), valid_live_session AS MATERIALIZED (
+    SELECT ls.live_session_id, ls.event_id, ls.member_id, ls.active_until
+    FROM event.live_mode_session ls
+    JOIN latest_consent lc
+      ON lc.member_consent_id = ls.consent_record_id
+     AND lc.member_id = ls.member_id
+     AND lc.purpose_code = 'LIVE_MODE'
+     AND lc.decision = 'GRANTED'
+     AND lc.withdrawn_at IS NULL
+    WHERE ls.status = 'ACTIVE'
+      AND ls.active_until > CURRENT_TIMESTAMP
 )
 SELECT m.member_id, CAST('GENERAL' AS varchar(64)) AS context_id,
        true AS is_live,
        (CASE WHEN m.status = 'ACTIVE' AND p.profile_status = 'ACTIVE' AND p.visibility <> 'HIDDEN' THEN true ELSE false END) AS is_visible,
        EXISTS (SELECT 1 FROM granted_consent gc WHERE gc.member_id = m.member_id AND gc.purpose_code IN ('MATCH','MATCHING')) AS has_consent,
        (CASE WHEN m.status = 'SUSPENDED' OR m.suspended_at IS NOT NULL THEN true ELSE false END) AS is_suspended,
-       (CASE WHEN m.status = 'DELETED' OR m.deleted_at IS NOT NULL THEN true ELSE false END) AS is_deleted
+       (CASE WHEN m.status = 'DELETED' OR m.deleted_at IS NOT NULL THEN true ELSE false END) AS is_deleted,
+       m.community_id
 FROM iam.member m
 JOIN core.member_profile p ON p.member_id = m.member_id
 UNION ALL
 SELECT m.member_id, e.event_id,
-       (CASE WHEN (ep.live_mode_required IS FALSE OR (ls.status = 'ACTIVE' AND ls.active_until > CURRENT_TIMESTAMP))
+       (CASE WHEN (ep.live_mode_required IS FALSE OR ls.live_session_id IS NOT NULL)
                    AND (ep.proximity_mode <> 'COARSE_CELL' OR EXISTS (
                        SELECT 1 FROM event.event_presence pr
                        WHERE pr.live_session_id = ls.live_session_id
@@ -1511,16 +2128,18 @@ SELECT m.member_id, e.event_id,
                          AND pr.expires_at > CURRENT_TIMESTAMP
                    )) THEN true ELSE false END) AS is_live,
        (CASE WHEN m.status = 'ACTIVE' AND p.profile_status = 'ACTIVE' AND p.visibility <> 'HIDDEN' THEN true ELSE false END) AS is_visible,
-       EXISTS (SELECT 1 FROM granted_consent gc WHERE gc.member_id = m.member_id AND gc.purpose_code IN ('LIVE_MODE','MATCH','MATCHING')) AS has_consent,
+       EXISTS (SELECT 1 FROM granted_consent gc WHERE gc.member_id = m.member_id AND gc.purpose_code IN ('MATCH','MATCHING')) AS has_consent,
        (CASE WHEN m.status = 'SUSPENDED' OR m.suspended_at IS NOT NULL THEN true ELSE false END) AS is_suspended,
-       (CASE WHEN m.status = 'DELETED' OR m.deleted_at IS NOT NULL THEN true ELSE false END) AS is_deleted
+       (CASE WHEN m.status = 'DELETED' OR m.deleted_at IS NOT NULL THEN true ELSE false END) AS is_deleted,
+       m.community_id
 FROM event.event e
 JOIN active_event_policy ep ON ep.event_id = e.event_id
 JOIN event.event_registration er ON er.event_id = e.event_id
-JOIN iam.member m ON m.member_id = er.member_id
+JOIN iam.member m ON m.member_id = er.member_id AND m.community_id = e.community_id
 JOIN core.member_profile p ON p.member_id = m.member_id
-LEFT JOIN event.live_mode_session ls ON ls.event_id = e.event_id AND ls.member_id = m.member_id AND ls.status = 'ACTIVE'
-WHERE e.status IN ('PUBLISHED','ACTIVE')
+LEFT JOIN valid_live_session ls ON ls.event_id = e.event_id AND ls.member_id = m.member_id
+WHERE e.status = 'ACTIVE'
+  AND CURRENT_TIMESTAMP >= e.starts_at AND CURRENT_TIMESTAMP < e.ends_at
   AND (ep.registration_required IS FALSE OR er.status IN ('REGISTERED','CHECKED_IN'))
   AND (ep.check_in_required IS FALSE OR er.status = 'CHECKED_IN');
 
@@ -1551,7 +2170,8 @@ SELECT cp.conversation_id, cp.member_id, c.connection_id, c.status AS conversati
                       ) THEN true ELSE false END) AS can_send
 FROM chat.conversation_participant cp
 JOIN chat.conversation c ON c.conversation_id = cp.conversation_id
-JOIN social.connection cn ON cn.connection_id = c.connection_id;
+JOIN social.connection cn ON cn.connection_id = c.connection_id
+JOIN iam.member sender ON sender.member_id = cp.member_id AND sender.status = 'ACTIVE';
 
 CREATE OR REPLACE VIEW admin.vw_member_review
 AS
@@ -1578,8 +2198,15 @@ AS $$
            i.category, i.industry, i.geography, i.updated_at,
            e.model_version, e.dimensions, e.normalized_hash, e.embedding
     FROM nlp.nlp_intent i
-    JOIN nlp.nlp_embedding e ON e.intent_id = i.intent_id AND e.status = 'ACTIVE'
-    JOIN nlp.nlp_model_version mv ON mv.model_version = e.model_version AND mv.status = 'ACTIVE'
+    JOIN nlp.nlp_embedding e
+      ON e.intent_id = i.intent_id
+     AND e.status = 'ACTIVE'
+     AND e.normalized_hash = i.normalized_hash
+    JOIN nlp.nlp_model_version mv
+      ON mv.model_version = e.model_version
+     AND mv.status = 'ACTIVE'
+     AND mv.dimensions = e.dimensions
+     AND mv.preprocessing_version = i.preprocessing_version
     WHERE i.intent_id = p_intent_id AND i.member_id = p_member_id AND i.context_id = p_context_id
       AND i.status = 'MATCH_READY' AND i.expires_at > CURRENT_TIMESTAMP;
 $$;
@@ -1601,11 +2228,30 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'max_rows must be between 50 and 200.';
     END IF;
     RETURN QUERY
-    WITH requester_embedding AS MATERIALIZED (
-        SELECT e.embedding
+    WITH requester_scope AS MATERIALIZED (
+        SELECT eligibility.community_id
+        FROM nlp.vw_member_context_eligibility eligibility
+        WHERE eligibility.member_id = p_requester_id
+          AND eligibility.context_id = p_context_id
+          AND eligibility.is_live
+          AND eligibility.is_visible
+          AND eligibility.has_consent
+          AND NOT eligibility.is_suspended
+          AND NOT eligibility.is_deleted
+        LIMIT 1
+    ), requester_embedding AS MATERIALIZED (
+        SELECT i.intent_id, e.embedding
         FROM nlp.nlp_intent i
-        JOIN nlp.nlp_embedding e ON e.intent_id = i.intent_id AND e.status = 'ACTIVE'
-        JOIN nlp.nlp_model_version mv ON mv.model_version = e.model_version AND mv.status = 'ACTIVE'
+        CROSS JOIN requester_scope
+        JOIN nlp.nlp_embedding e
+          ON e.intent_id = i.intent_id
+         AND e.status = 'ACTIVE'
+         AND e.normalized_hash = i.normalized_hash
+        JOIN nlp.nlp_model_version mv
+          ON mv.model_version = e.model_version
+         AND mv.status = 'ACTIVE'
+         AND mv.dimensions = e.dimensions
+         AND mv.preprocessing_version = i.preprocessing_version
         WHERE i.member_id = p_requester_id AND i.context_id = p_context_id
           AND i.intent_type = 'WANT' AND i.status = 'MATCH_READY' AND i.expires_at > CURRENT_TIMESTAMP
         ORDER BY i.updated_at DESC, i.intent_id
@@ -1621,17 +2267,13 @@ BEGIN
     ), eligible_members AS MATERIALIZED (
         SELECT m.member_id
         FROM nlp.vw_member_context_eligibility m
+        JOIN requester_scope requester ON requester.community_id = m.community_id
         WHERE m.context_id = p_context_id AND m.member_id <> p_requester_id
           AND m.is_live AND m.is_visible AND m.has_consent AND NOT m.is_suspended AND NOT m.is_deleted
           AND NOT EXISTS (
               SELECT 1 FROM nlp.vw_member_relationship r
               WHERE r.context_id = 'GLOBAL' AND r.member_id = p_requester_id AND r.other_member_id = m.member_id
                 AND (r.is_blocked OR r.is_connected)
-          )
-          AND NOT EXISTS (
-              SELECT 1 FROM nlp.match_suppression s
-              WHERE s.starts_at <= CURRENT_TIMESTAMP AND (s.ends_at IS NULL OR s.ends_at > CURRENT_TIMESTAMP)
-                AND (s.member_id = m.member_id OR s.context_id = p_context_id)
           )
           AND (
               NOT EXISTS (SELECT 1 FROM matching_policy p WHERE p.proximity_mode = 'COARSE_CELL')
@@ -1662,9 +2304,26 @@ BEGIN
                e.model_version, e.dimensions, e.normalized_hash AS embedding_hash, e.embedding
         FROM eligible_members m
         JOIN nlp.nlp_intent i ON i.member_id = m.member_id AND i.context_id = p_context_id
-        JOIN nlp.nlp_embedding e ON e.intent_id = i.intent_id AND e.status = 'ACTIVE'
-        JOIN nlp.nlp_model_version mv ON mv.model_version = e.model_version AND mv.status = 'ACTIVE'
+        JOIN nlp.nlp_embedding e
+          ON e.intent_id = i.intent_id
+         AND e.status = 'ACTIVE'
+         AND e.normalized_hash = i.normalized_hash
+        JOIN nlp.nlp_model_version mv
+          ON mv.model_version = e.model_version
+         AND mv.status = 'ACTIVE'
+         AND mv.dimensions = e.dimensions
+         AND mv.preprocessing_version = i.preprocessing_version
+        CROSS JOIN requester_embedding requester
         WHERE i.intent_type = 'OFFER' AND i.status = 'MATCH_READY' AND i.expires_at > CURRENT_TIMESTAMP
+          AND NOT EXISTS (
+              SELECT 1
+              FROM nlp.match_suppression s
+              WHERE s.starts_at <= CURRENT_TIMESTAMP
+                AND (s.ends_at IS NULL OR s.ends_at > CURRENT_TIMESTAMP)
+                AND (s.member_id IS NULL OR s.member_id IN (p_requester_id, m.member_id))
+                AND (s.context_id IS NULL OR s.context_id = p_context_id)
+                AND (s.intent_id IS NULL OR s.intent_id IN (requester.intent_id, i.intent_id))
+          )
         ORDER BY i.updated_at DESC, i.intent_id
         LIMIT p_max_rows
     )
@@ -1758,25 +2417,55 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS social.accept_connection_request(varchar, varchar, varchar, varchar);
 CREATE OR REPLACE FUNCTION social.accept_connection_request(
     p_connection_request_id varchar(64), p_recipient_member_id varchar(64),
-    p_connection_id varchar(64), p_conversation_id varchar(64)
+    p_connection_id varchar(64), p_conversation_id varchar(64),
+    p_idempotency_key varchar(128), p_request_hash char(64),
+    p_idempotency_expires_at timestamptz, p_sync_expires_at timestamptz
 )
 RETURNS TABLE (connection_id varchar(64), conversation_id varchar(64))
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, social, chat, ops, iam
 AS $$
 DECLARE
     v_sender_id varchar(64);
+    v_community_id varchar(64);
+    v_request_version bigint;
     v_existing_connection_id varchar(64);
     v_existing_conversation_id varchar(64);
+    v_existing_hash char(64);
+    v_idempotency_status smallint;
+    v_claimed boolean := false;
 BEGIN
-    SELECT sender_member_id INTO v_sender_id
-    FROM social.connection_request
-    WHERE connection_request_id = p_connection_request_id
-      AND recipient_member_id = p_recipient_member_id
-      AND status = 'PENDING' AND expires_at > CURRENT_TIMESTAMP
+    IF p_idempotency_key IS NULL OR btrim(p_idempotency_key) = '' OR p_request_hash IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Idempotency key and request hash are required.';
+    END IF;
+    IF p_idempotency_expires_at <= CURRENT_TIMESTAMP OR p_sync_expires_at <= CURRENT_TIMESTAMP THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Idempotency and sync expiry must be in the future.';
+    END IF;
+
+    INSERT INTO ops.idempotency_record(scope, idempotency_key, actor_id, request_hash, expires_at)
+    VALUES ('social.accept_connection_request', p_idempotency_key, p_recipient_member_id, p_request_hash, p_idempotency_expires_at)
+    ON CONFLICT (scope, actor_id, idempotency_key) DO NOTHING
+    RETURNING true INTO v_claimed;
+
+    SELECT request_hash, status_code
+    INTO v_existing_hash, v_idempotency_status
+    FROM ops.idempotency_record
+    WHERE scope = 'social.accept_connection_request'
+      AND actor_id = p_recipient_member_id
+      AND idempotency_key = p_idempotency_key
     FOR UPDATE;
-    IF v_sender_id IS NULL THEN
+
+    IF v_existing_hash IS DISTINCT FROM p_request_hash THEN
+        RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'Idempotency key was already used with a different request.';
+    END IF;
+    IF NOT COALESCE(v_claimed, false) THEN
+        IF v_idempotency_status IS NULL THEN
+            RAISE EXCEPTION USING ERRCODE = '55P03', MESSAGE = 'Idempotent operation is still in progress.';
+        END IF;
         SELECT c.connection_id, cv.conversation_id
         INTO v_existing_connection_id, v_existing_conversation_id
         FROM social.connection c
@@ -1787,7 +2476,23 @@ BEGIN
             RETURN QUERY SELECT v_existing_connection_id, v_existing_conversation_id;
             RETURN;
         END IF;
-        RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'Pending connection request not found.';
+        RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'Idempotency result does not match the requested resource identifiers.';
+    END IF;
+
+    SELECT cr.sender_member_id, sender.community_id
+    INTO v_sender_id, v_community_id
+    FROM social.connection_request cr
+    JOIN iam.member sender ON sender.member_id = cr.sender_member_id AND sender.status = 'ACTIVE'
+    JOIN iam.member recipient
+      ON recipient.member_id = cr.recipient_member_id
+     AND recipient.status = 'ACTIVE'
+     AND recipient.community_id = sender.community_id
+    WHERE cr.connection_request_id = p_connection_request_id
+      AND cr.recipient_member_id = p_recipient_member_id
+      AND cr.status = 'PENDING' AND cr.expires_at > CURRENT_TIMESTAMP
+    FOR UPDATE OF cr;
+    IF v_sender_id IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'Eligible pending connection request not found.';
     END IF;
     IF EXISTS (
         SELECT 1 FROM social.member_block
@@ -1799,7 +2504,8 @@ BEGIN
     END IF;
     UPDATE social.connection_request
     SET status = 'ACCEPTED', responded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-    WHERE connection_request_id = p_connection_request_id;
+    WHERE connection_request_id = p_connection_request_id
+    RETURNING row_version INTO v_request_version;
     INSERT INTO social.connection(connection_id, member_low_id, member_high_id, accepted_request_id)
     VALUES (p_connection_id, LEAST(v_sender_id, p_recipient_member_id), GREATEST(v_sender_id, p_recipient_member_id), p_connection_request_id);
     INSERT INTO chat.conversation(conversation_id, connection_id) VALUES (p_conversation_id, p_connection_id);
@@ -1808,21 +2514,91 @@ BEGIN
     INSERT INTO ops.outbox_event(outbox_event_id, aggregate_type, aggregate_id, event_type, payload_json)
     VALUES (gen_random_uuid()::text, 'CONNECTION', p_connection_id, 'connection.accepted',
             jsonb_build_object('connectionId', p_connection_id, 'conversationId', p_conversation_id));
+
+    INSERT INTO ops.sync_change(
+        community_id, member_scope_id, resource_type, resource_id, change_type,
+        resource_version, payload_json, expires_at
+    )
+    SELECT v_community_id, member_id, 'REQUEST', p_connection_request_id, 'UPSERT',
+           v_request_version,
+           jsonb_build_object('requestId', p_connection_request_id, 'status', 'ACCEPTED'),
+           p_sync_expires_at
+    FROM (VALUES (v_sender_id), (p_recipient_member_id)) AS recipients(member_id)
+    UNION ALL
+    SELECT v_community_id, member_id, 'CONVERSATION', p_conversation_id, 'UPSERT',
+           1,
+           jsonb_build_object('conversationId', p_conversation_id, 'connectionId', p_connection_id),
+           p_sync_expires_at
+    FROM (VALUES (v_sender_id), (p_recipient_member_id)) AS recipients(member_id);
+
+    UPDATE ops.idempotency_record
+    SET status_code = 200, response_ref = p_connection_id || ':' || p_conversation_id
+    WHERE scope = 'social.accept_connection_request'
+      AND actor_id = p_recipient_member_id
+      AND idempotency_key = p_idempotency_key;
     RETURN QUERY SELECT p_connection_id, p_conversation_id;
 END;
 $$;
 
+DROP FUNCTION IF EXISTS chat.save_message(varchar, varchar, varchar, varchar, text, timestamptz);
 CREATE OR REPLACE FUNCTION chat.save_message(
     p_message_id varchar(64), p_conversation_id varchar(64), p_sender_member_id varchar(64),
-    p_message_type varchar(20), p_body text DEFAULT NULL, p_client_sent_at timestamptz DEFAULT NULL
+    p_message_type varchar(20), p_body text, p_client_sent_at timestamptz,
+    p_idempotency_key varchar(128), p_request_hash char(64),
+    p_idempotency_expires_at timestamptz, p_sync_expires_at timestamptz
 )
 RETURNS SETOF chat.message
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, chat, ops, iam
 AS $$
+DECLARE
+    v_message chat.message%ROWTYPE;
+    v_existing_hash char(64);
+    v_idempotency_status smallint;
+    v_claimed boolean := false;
+    v_community_id varchar(64);
 BEGIN
+    IF p_idempotency_key IS NULL OR btrim(p_idempotency_key) = '' OR p_request_hash IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Idempotency key and request hash are required.';
+    END IF;
+    IF p_idempotency_expires_at <= CURRENT_TIMESTAMP OR p_sync_expires_at <= CURRENT_TIMESTAMP THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Idempotency and sync expiry must be in the future.';
+    END IF;
     IF p_message_type NOT IN ('TEXT','FILE','SYSTEM') THEN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Unsupported message type.';
     END IF;
+
+    INSERT INTO ops.idempotency_record(scope, idempotency_key, actor_id, request_hash, expires_at)
+    VALUES ('chat.save_message', p_idempotency_key, p_sender_member_id, p_request_hash, p_idempotency_expires_at)
+    ON CONFLICT (scope, actor_id, idempotency_key) DO NOTHING
+    RETURNING true INTO v_claimed;
+    SELECT request_hash, status_code
+    INTO v_existing_hash, v_idempotency_status
+    FROM ops.idempotency_record
+    WHERE scope = 'chat.save_message'
+      AND actor_id = p_sender_member_id
+      AND idempotency_key = p_idempotency_key
+    FOR UPDATE;
+    IF v_existing_hash IS DISTINCT FROM p_request_hash THEN
+        RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'Idempotency key was already used with a different request.';
+    END IF;
+    IF NOT COALESCE(v_claimed, false) THEN
+        IF v_idempotency_status IS NULL THEN
+            RAISE EXCEPTION USING ERRCODE = '55P03', MESSAGE = 'Idempotent operation is still in progress.';
+        END IF;
+        SELECT * INTO v_message FROM chat.message WHERE message_id = p_message_id;
+        IF NOT FOUND OR v_message.conversation_id IS DISTINCT FROM p_conversation_id
+           OR v_message.sender_member_id IS DISTINCT FROM p_sender_member_id
+           OR v_message.message_type IS DISTINCT FROM p_message_type
+           OR v_message.body IS DISTINCT FROM p_body
+           OR v_message.client_sent_at IS DISTINCT FROM p_client_sent_at THEN
+            RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'Idempotency result does not match the message request.';
+        END IF;
+        RETURN NEXT v_message;
+        RETURN;
+    END IF;
+
     IF NOT EXISTS (
         SELECT 1 FROM chat.vw_authorized_conversation
         WHERE conversation_id = p_conversation_id AND member_id = p_sender_member_id AND can_send
@@ -1830,25 +2606,174 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Member is not authorized to send to this conversation.';
     END IF;
     PERFORM 1 FROM chat.conversation WHERE conversation_id = p_conversation_id FOR UPDATE;
-    IF EXISTS (
-        SELECT 1 FROM chat.message
-        WHERE message_id = p_message_id
-          AND (conversation_id <> p_conversation_id OR sender_member_id <> p_sender_member_id)
-    ) THEN
-        RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'message_id is already bound to another sender or conversation.';
+    IF EXISTS (SELECT 1 FROM chat.message WHERE message_id = p_message_id) THEN
+        RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'message_id is already bound to another idempotent operation.';
     END IF;
     INSERT INTO chat.message(message_id, conversation_id, sender_member_id, message_type, body, client_sent_at)
     VALUES (p_message_id, p_conversation_id, p_sender_member_id, p_message_type, p_body, p_client_sent_at)
-    ON CONFLICT (message_id) DO NOTHING;
-    IF FOUND THEN
-        UPDATE chat.conversation
-        SET last_message_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-        WHERE conversation_id = p_conversation_id;
-        INSERT INTO ops.outbox_event(outbox_event_id, aggregate_type, aggregate_id, event_type, payload_json)
-        VALUES (gen_random_uuid()::text, 'MESSAGE', p_message_id, 'chat.message.created',
-                jsonb_build_object('messageId', p_message_id, 'conversationId', p_conversation_id));
+    RETURNING * INTO v_message;
+
+    UPDATE chat.conversation
+    SET last_message_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE conversation_id = p_conversation_id;
+    INSERT INTO ops.outbox_event(outbox_event_id, aggregate_type, aggregate_id, event_type, payload_json)
+    VALUES (gen_random_uuid()::text, 'MESSAGE', p_message_id, 'chat.message.created',
+            jsonb_build_object('messageId', p_message_id, 'conversationId', p_conversation_id));
+
+    SELECT community_id INTO v_community_id
+    FROM iam.member WHERE member_id = p_sender_member_id;
+    INSERT INTO ops.sync_change(
+        community_id, member_scope_id, resource_type, resource_id, change_type,
+        resource_version, payload_json, expires_at
+    )
+    SELECT v_community_id, cp.member_id, 'MESSAGE', p_message_id, 'UPSERT',
+           v_message.row_version,
+           jsonb_build_object(
+               'messageId', p_message_id,
+               'conversationId', p_conversation_id,
+               'senderMemberId', p_sender_member_id,
+               'serverSequence', v_message.server_sequence
+           ),
+           p_sync_expires_at
+    FROM chat.conversation_participant cp
+    WHERE cp.conversation_id = p_conversation_id;
+
+    UPDATE ops.idempotency_record
+    SET status_code = 200, response_ref = p_message_id
+    WHERE scope = 'chat.save_message'
+      AND actor_id = p_sender_member_id
+      AND idempotency_key = p_idempotency_key;
+    RETURN NEXT v_message;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION chat.save_message_receipt(
+    p_message_id varchar(64), p_member_id varchar(64),
+    p_delivered_at timestamptz, p_read_at timestamptz,
+    p_idempotency_key varchar(128), p_request_hash char(64),
+    p_idempotency_expires_at timestamptz, p_sync_expires_at timestamptz
+)
+RETURNS SETOF chat.message_receipt
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, chat, ops, iam
+AS $$
+DECLARE
+    v_receipt chat.message_receipt%ROWTYPE;
+    v_existing_hash char(64);
+    v_idempotency_status smallint;
+    v_claimed boolean := false;
+    v_changed boolean := false;
+    v_delivered_at timestamptz := COALESCE(p_delivered_at, p_read_at);
+    v_conversation_id varchar(64);
+    v_community_id varchar(64);
+    v_message_version bigint;
+BEGIN
+    IF p_idempotency_key IS NULL OR btrim(p_idempotency_key) = '' OR p_request_hash IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Idempotency key and request hash are required.';
     END IF;
-    RETURN QUERY SELECT m.* FROM chat.message m WHERE m.message_id = p_message_id;
+    IF p_idempotency_expires_at <= CURRENT_TIMESTAMP OR p_sync_expires_at <= CURRENT_TIMESTAMP THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Idempotency and sync expiry must be in the future.';
+    END IF;
+    IF v_delivered_at IS NULL AND p_read_at IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'A delivered or read timestamp is required.';
+    END IF;
+
+    INSERT INTO ops.idempotency_record(scope, idempotency_key, actor_id, request_hash, expires_at)
+    VALUES ('chat.save_message_receipt', p_idempotency_key, p_member_id, p_request_hash, p_idempotency_expires_at)
+    ON CONFLICT (scope, actor_id, idempotency_key) DO NOTHING
+    RETURNING true INTO v_claimed;
+    SELECT request_hash, status_code
+    INTO v_existing_hash, v_idempotency_status
+    FROM ops.idempotency_record
+    WHERE scope = 'chat.save_message_receipt'
+      AND actor_id = p_member_id
+      AND idempotency_key = p_idempotency_key
+    FOR UPDATE;
+    IF v_existing_hash IS DISTINCT FROM p_request_hash THEN
+        RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'Idempotency key was already used with a different request.';
+    END IF;
+    IF NOT COALESCE(v_claimed, false) THEN
+        IF v_idempotency_status IS NULL THEN
+            RAISE EXCEPTION USING ERRCODE = '55P03', MESSAGE = 'Idempotent operation is still in progress.';
+        END IF;
+        SELECT * INTO v_receipt
+        FROM chat.message_receipt
+        WHERE message_id = p_message_id AND member_id = p_member_id;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'Idempotency result does not match the receipt request.';
+        END IF;
+        RETURN NEXT v_receipt;
+        RETURN;
+    END IF;
+
+    SELECT msg.conversation_id, msg.row_version, sender.community_id
+    INTO v_conversation_id, v_message_version, v_community_id
+    FROM chat.message msg
+    JOIN iam.member sender ON sender.member_id = msg.sender_member_id
+    WHERE msg.message_id = p_message_id
+    FOR UPDATE OF msg;
+    IF v_conversation_id IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'Message not found.';
+    END IF;
+
+    INSERT INTO chat.message_receipt(message_id, member_id, delivered_at, read_at)
+    VALUES (p_message_id, p_member_id, v_delivered_at, p_read_at)
+    ON CONFLICT (message_id, member_id) DO UPDATE
+    SET delivered_at = COALESCE(chat.message_receipt.delivered_at, EXCLUDED.delivered_at),
+        read_at = COALESCE(chat.message_receipt.read_at, EXCLUDED.read_at),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE (chat.message_receipt.delivered_at IS NULL AND EXCLUDED.delivered_at IS NOT NULL)
+       OR (chat.message_receipt.read_at IS NULL AND EXCLUDED.read_at IS NOT NULL)
+    RETURNING * INTO v_receipt;
+    v_changed := FOUND;
+    IF NOT v_changed THEN
+        SELECT * INTO v_receipt
+        FROM chat.message_receipt
+        WHERE message_id = p_message_id AND member_id = p_member_id;
+    END IF;
+
+    IF p_read_at IS NOT NULL THEN
+        UPDATE chat.conversation_participant cp
+        SET last_read_message_id = p_message_id
+        WHERE cp.conversation_id = v_conversation_id
+          AND cp.member_id = p_member_id
+          AND (
+              cp.last_read_message_id IS NULL
+              OR (SELECT old_message.server_sequence FROM chat.message old_message
+                  WHERE old_message.message_id = cp.last_read_message_id) <=
+                 (SELECT current_message.server_sequence FROM chat.message current_message
+                  WHERE current_message.message_id = p_message_id)
+          );
+    END IF;
+
+    IF v_changed THEN
+        INSERT INTO ops.outbox_event(outbox_event_id, aggregate_type, aggregate_id, event_type, payload_json)
+        VALUES (gen_random_uuid()::text, 'MESSAGE', p_message_id, 'chat.message.receipt_updated',
+                jsonb_build_object('messageId', p_message_id, 'memberId', p_member_id));
+        INSERT INTO ops.sync_change(
+            community_id, member_scope_id, resource_type, resource_id, change_type,
+            resource_version, payload_json, expires_at
+        )
+        SELECT v_community_id, cp.member_id, 'MESSAGE', p_message_id, 'UPSERT',
+               v_message_version,
+               jsonb_build_object(
+                   'messageId', p_message_id,
+                   'receiptMemberId', p_member_id,
+                   'isDelivered', v_receipt.delivered_at IS NOT NULL,
+                   'isRead', v_receipt.read_at IS NOT NULL
+               ),
+               p_sync_expires_at
+        FROM chat.conversation_participant cp
+        WHERE cp.conversation_id = v_conversation_id;
+    END IF;
+
+    UPDATE ops.idempotency_record
+    SET status_code = 200, response_ref = p_message_id || ':' || p_member_id
+    WHERE scope = 'chat.save_message_receipt'
+      AND actor_id = p_member_id
+      AND idempotency_key = p_idempotency_key;
+    RETURN NEXT v_receipt;
 END;
 $$;
 
@@ -2130,13 +3055,24 @@ $$;
 
 GRANT USAGE ON SCHEMA admin TO olga_admin_reader;
 GRANT SELECT ON admin.vw_member_review TO olga_admin_reader;
+REVOKE ALL ON SCHEMA history FROM PUBLIC;
+REVOKE ALL ON ALL TABLES IN SCHEMA history FROM PUBLIC;
+GRANT USAGE ON SCHEMA history TO olga_admin_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA history TO olga_admin_reader;
+GRANT USAGE ON SCHEMA ops TO olga_core_app, olga_identity_app, olga_consent_app, olga_event_app,
+    olga_social_app, olga_chat_app, olga_storage_app, olga_notification_app, olga_nlp_app,
+    olga_moderation_app, olga_analytics_writer;
+GRANT EXECUTE ON FUNCTION ops.set_audit_context(varchar), ops.current_audit_actor_id()
+    TO olga_core_app, olga_identity_app, olga_consent_app, olga_event_app, olga_social_app,
+       olga_chat_app, olga_storage_app, olga_notification_app, olga_nlp_app,
+       olga_moderation_app, olga_analytics_writer;
 GRANT SELECT ON nlp.vw_member_context_eligibility, nlp.vw_member_relationship TO olga_nlp_app;
 GRANT SELECT ON chat.vw_authorized_conversation TO olga_chat_app;
 GRANT SELECT ON iam.member TO olga_notification_app;
 GRANT SELECT ON core.member_profile, consent.member_consent TO olga_nlp_app;
 GRANT SELECT ON event.event_matching_policy TO olga_notification_app;
 GRANT INSERT ON ops.outbox_event TO olga_social_app, olga_chat_app, olga_notification_app, olga_storage_app;
-GRANT SELECT, INSERT ON chat.conversation, chat.conversation_participant TO olga_social_app;
+GRANT SELECT ON chat.conversation, chat.conversation_participant TO olga_social_app;
 GRANT INSERT ON ops.background_job TO olga_storage_app, olga_consent_app;
 GRANT INSERT ON moderation.content_scan TO olga_storage_app;
 GRANT INSERT ON ops.audit_event TO olga_identity_app, olga_consent_app, olga_storage_app, olga_moderation_app;
@@ -2149,6 +3085,12 @@ REVOKE INSERT, UPDATE, DELETE ON ops.retention_policy FROM olga_ops_worker;
 REVOKE DELETE ON ops.retention_execution FROM olga_ops_worker;
 REVOKE DELETE ON consent.privacy_request, consent.privacy_request_task FROM olga_consent_app;
 REVOKE DELETE ON iam.role, iam.permission, iam.role_permission, iam.member_role FROM olga_identity_app;
+
+-- Atomic chat/connection workflows are function-only. Direct DML would bypass the
+-- idempotency record, transactional outbox and member-scoped sync ledger.
+REVOKE INSERT, UPDATE, DELETE ON social.connection FROM olga_social_app;
+REVOKE INSERT, UPDATE, DELETE ON chat.conversation, chat.conversation_participant,
+    chat.message, chat.message_receipt FROM olga_chat_app;
 
 -- ======================== VERIFICATION ========================
 DO $$
@@ -2170,12 +3112,35 @@ DECLARE
     expected_views text[] := ARRAY[
         'nlp.vw_member_context_eligibility','nlp.vw_member_relationship','chat.vw_authorized_conversation','admin.vw_member_review'
     ];
+    expected_history_tables text[] := ARRAY[
+        'history.iam_permission','history.iam_role','history.core_sector','history.consent_consent_policy',
+        'history.event_venue','history.event_event_matching_policy','history.notification_notification_policy',
+        'history.nlp_nlp_model_version','history.nlp_nlp_ranking_config','history.moderation_content_rule',
+        'history.ops_retention_policy'
+    ];
+    expected_temporal_tables text[] := ARRAY[
+        'iam.permission','iam.role','core.sector','consent.consent_policy','event.venue',
+        'event.event_matching_policy','notification.notification_policy','nlp.nlp_model_version',
+        'nlp.nlp_ranking_config','moderation.content_rule','ops.retention_policy'
+    ];
     expected_functions text[] := ARRAY[
         'nlp.get_requester_intent','nlp.get_eligible_candidates','nlp.save_match_results','nlp.save_feedback',
-        'social.accept_connection_request','chat.save_message','event.purge_expired_presence','notification.try_enqueue'
+        'social.accept_connection_request','chat.save_message','chat.save_message_receipt',
+        'event.purge_expired_presence','notification.try_enqueue',
+        'ops.set_audit_context','ops.current_audit_actor_id','ops.set_audit_actor'
     ];
     expected_triggers text[] := ARRAY[
         'storage.file_asset_link.enforce_file_asset_link_resource',
+        'event.live_mode_session.enforce_live_mode_session_consent',
+        'nlp.match_suppression.enforce_match_suppression_target',
+        'social.connection.enforce_connection_request_pair',
+        'social.connection_request.validate_accepted_request_connection_on_request',
+        'social.connection.validate_accepted_request_connection_on_connection',
+        'chat.conversation_participant.enforce_conversation_participant',
+        'chat.conversation.validate_conversation_participant_set_on_conversation',
+        'chat.conversation_participant.validate_conversation_participant_set_on_participant',
+        'chat.message.enforce_message_sender',
+        'chat.message_receipt.enforce_message_receipt',
         'consent.privacy_request.enforce_privacy_request_completion',
         'consent.privacy_request_task.protect_completed_privacy_request_tasks',
         'ops.retention_policy.protect_active_retention_policy'
@@ -2196,12 +3161,40 @@ BEGIN
     FOREACH item IN ARRAY expected_views LOOP
         IF to_regclass(item) IS NULL THEN RAISE EXCEPTION 'Required view is missing: %', item; END IF;
     END LOOP;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'nlp' AND table_name = 'vw_member_context_eligibility'
+          AND column_name = 'community_id'
+    ) THEN RAISE EXCEPTION 'Matching eligibility view must expose the authoritative community boundary.'; END IF;
+    FOREACH item IN ARRAY expected_history_tables LOOP
+        IF to_regclass(item) IS NULL THEN RAISE EXCEPTION 'Required temporal history table is missing: %', item; END IF;
+    END LOOP;
+    FOREACH item IN ARRAY expected_temporal_tables LOOP
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_trigger t
+            WHERE t.tgrelid = item::regclass AND t.tgname = 'versioning_history'
+              AND t.tgfoid = 'versioning()'::regprocedure AND t.tgenabled <> 'D'
+        ) THEN RAISE EXCEPTION 'Required temporal versioning trigger is missing: %', item; END IF;
+    END LOOP;
     FOREACH item IN ARRAY expected_functions LOOP
         IF NOT EXISTS (
             SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
             WHERE n.nspname = split_part(item,'.',1) AND p.proname = split_part(item,'.',2)
         ) THEN RAISE EXCEPTION 'Required function is missing: %', item; END IF;
     END LOOP;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'social' AND p.proname = 'accept_connection_request'
+          AND p.pronargs = 8 AND p.prosecdef
+    ) OR NOT EXISTS (
+        SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'chat' AND p.proname = 'save_message'
+          AND p.pronargs = 10 AND p.prosecdef
+    ) OR NOT EXISTS (
+        SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'chat' AND p.proname = 'save_message_receipt'
+          AND p.pronargs = 8 AND p.prosecdef
+    ) THEN RAISE EXCEPTION 'Atomic mutation functions are missing required signatures or SECURITY DEFINER protection.'; END IF;
     FOREACH item IN ARRAY expected_triggers LOOP
         IF NOT EXISTS (
             SELECT 1 FROM pg_trigger t
@@ -2214,6 +3207,25 @@ BEGIN
     IF to_regclass('chat.message_sequence') IS NULL OR to_regclass('ops.sync_change_sequence') IS NULL THEN
         RAISE EXCEPTION 'One or more required sequences are missing.';
     END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'ops.idempotency_record'::regclass
+          AND conname = 'pk_idempotency_record_'
+          AND pg_get_constraintdef(oid) = 'PRIMARY KEY (scope, actor_id, idempotency_key)'
+    ) THEN RAISE EXCEPTION 'Idempotency primary key must be scoped by operation, actor and client key.'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'temporal_tables') THEN
+        RAISE EXCEPTION 'temporal_tables extension is missing.';
+    END IF;
+    IF NOT (SELECT prosecdef FROM pg_proc WHERE oid = 'versioning()'::regprocedure) THEN
+        RAISE EXCEPTION 'Temporal versioning must run as a security-definer function.';
+    END IF;
+    IF EXISTS (
+        SELECT 1
+        FROM pg_proc p
+        CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
+        WHERE p.oid = 'set_system_time(timestamptz)'::regprocedure
+          AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
+    ) THEN RAISE EXCEPTION 'PUBLIC must not be able to spoof temporal system time.'; END IF;
     IF to_regclass('chat.attachment') IS NOT NULL THEN RAISE EXCEPTION 'Legacy chat.attachment must not remain.'; END IF;
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
@@ -2253,6 +3265,35 @@ BEGIN
           )
     ) THEN RAISE EXCEPTION 'One or more row_version triggers are missing or disabled.'; END IF;
     IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns c
+        WHERE c.column_name = 'row_version'
+          AND c.table_schema IN ('core','iam','consent','event','social','chat','storage','notification','nlp','moderation','ops')
+          AND (
+              NOT EXISTS (
+                  SELECT 1 FROM information_schema.columns a
+                  WHERE a.table_schema = c.table_schema AND a.table_name = c.table_name
+                    AND a.column_name IN ('created_by','updated_by')
+                  GROUP BY a.table_schema, a.table_name HAVING count(*) = 2
+              )
+              OR NOT EXISTS (
+                  SELECT 1 FROM pg_trigger t
+                  WHERE t.tgrelid = format('%I.%I', c.table_schema, c.table_name)::regclass
+                    AND t.tgname = 'set_audit_actor' AND t.tgfoid = 'ops.set_audit_actor()'::regprocedure
+                    AND t.tgenabled <> 'D'
+              )
+          )
+    ) THEN RAISE EXCEPTION 'One or more mutable resources lack audit actor columns or triggers.'; END IF;
+    IF EXISTS (
+        SELECT 1 FROM unnest(expected_history_tables) h(history_name)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM information_schema.columns c
+            WHERE c.table_schema = split_part(h.history_name,'.',1)
+              AND c.table_name = split_part(h.history_name,'.',2)
+              AND c.column_name = 'sys_period' AND c.udt_name = 'tstzrange'
+        )
+    ) THEN RAISE EXCEPTION 'One or more temporal history tables lack a tstzrange system period.'; END IF;
+    IF EXISTS (
         SELECT 1 FROM pg_constraint c
         JOIN pg_namespace n ON n.oid = c.connamespace
         WHERE n.nspname IN ('core','iam','consent','event','social','chat','storage','notification','nlp','moderation','ops','analytics')
@@ -2268,6 +3309,30 @@ BEGIN
         WHERE schemaname IN ('core','iam','consent','event','social','chat','storage','notification','nlp','moderation','ops','analytics')
           AND indexdef ~* 'USING[[:space:]]+(hnsw|ivfflat)'
     ) THEN RAISE EXCEPTION 'Approximate vector indexes are not approved.'; END IF;
+    IF EXISTS (
+        SELECT 1
+        FROM chat.conversation c
+        JOIN social.connection cn ON cn.connection_id = c.connection_id
+        LEFT JOIN chat.conversation_participant cp ON cp.conversation_id = c.conversation_id
+        GROUP BY c.conversation_id, cn.member_low_id, cn.member_high_id
+        HAVING count(cp.member_id) <> 2
+           OR count(*) FILTER (WHERE cp.member_id IN (cn.member_low_id, cn.member_high_id)) <> 2
+    ) THEN RAISE EXCEPTION 'One or more conversations do not contain exactly their connection members.'; END IF;
+    IF EXISTS (
+        SELECT 1
+        FROM chat.message_receipt mr
+        JOIN chat.message m ON m.message_id = mr.message_id
+        LEFT JOIN chat.conversation_participant cp
+          ON cp.conversation_id = m.conversation_id AND cp.member_id = mr.member_id
+        WHERE cp.member_id IS NULL OR mr.member_id = m.sender_member_id
+           OR (mr.read_at IS NOT NULL AND (mr.delivered_at IS NULL OR mr.read_at < mr.delivered_at))
+    ) THEN RAISE EXCEPTION 'One or more message receipts violate participant or timestamp integrity.'; END IF;
+    IF EXISTS (
+        SELECT 1
+        FROM chat.conversation_participant cp
+        JOIN chat.message m ON m.message_id = cp.last_read_message_id
+        WHERE cp.last_read_message_id IS NOT NULL AND m.conversation_id <> cp.conversation_id
+    ) THEN RAISE EXCEPTION 'One or more participant read cursors reference another conversation.'; END IF;
     IF NOT EXISTS (SELECT 1 FROM iam.permission WHERE status = 'ACTIVE')
        OR NOT EXISTS (SELECT 1 FROM iam.role_permission WHERE revoked_at IS NULL) THEN
         RAISE EXCEPTION 'Authorization permission seeds are missing.';
@@ -2275,5 +3340,5 @@ BEGIN
 END;
 $$;
 
-COMMENT ON SCHEMA ops IS 'OLGA.SchemaVersion=2.3';
+COMMENT ON SCHEMA ops IS 'OLGA.SchemaVersion=2.4';
 COMMIT;

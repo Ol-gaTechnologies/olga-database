@@ -1,28 +1,31 @@
 # OLGA Connect PostgreSQL deployment package
 
-This package creates the OLGA Connect Release 1 schema defined by Database Architecture and Table-Level Design v2.3. The clean baseline targets PostgreSQL 17 on Azure Database for PostgreSQL Flexible Server and uses lower_snake_case physical identifiers throughout.
+This package creates the OLGA Connect Release 1 schema defined by Database Architecture and Table-Level Design v2.3, with the v2.4 auditability hardening. The clean baseline targets PostgreSQL 17 on Azure Database for PostgreSQL Flexible Server and uses lower_snake_case physical identifiers throughout.
 
 ## Baseline contents
 
 - `001_schemas_sequences.sql`: domain schemas, approved extensions, sequences, and shared migration helpers.
 - `010_tables.sql`: all 66 documented product tables, PostgreSQL types, and trigger-managed concurrency versions.
+- `015_audit_history.sql`: database-sourced creator/updater attribution and selective system-period history.
 - `020_constraints_indexes.sql`: idempotent foreign keys, checks, unique rules, and partial B-tree indexes.
 - `025_invariants.sql`: cross-row and polymorphic integrity triggers.
 - `030_views.sql`: controlled security and integration views.
-- `040_procedures.sql`: eight PostgreSQL functions for bounded reads and atomic workflows.
+- `040_procedures.sql`: PostgreSQL functions for bounded reads and atomic, idempotent workflows.
 - `050_seed.sql`: roles, permissions, `ranking-v1`, and optional provisional QA notification policies.
 - `060_security.sql`: NOLOGIN service roles and least-privilege grants.
 - `070_bind_identities.template.sql`: PostgreSQL role-membership template for pre-provisioned Azure identities.
 - `090_verify.sql`: post-deployment inventory, type, constraint, index, and seed checks.
 - `deploy.sql` and `deploy.ps1`: psql deployment entry points.
+- `Dockerfile` and `container/run-migrations.sh`: one-off Container Apps Job image for private-network deployment.
 - `azure-postgresql-deployment-inputs.example.json`: PostgreSQL Flexible Server provisioning inputs without credentials.
 - `OLGA_Connect_PostgreSQL_Full_Setup.sql`: standalone transactional setup script.
+- `docs/architecture-decisions-v2.4.md`: actor, lifecycle, temporal-history, privacy, and query decisions.
 
 The legacy v2.2 Azure SQL upgrade files remain source-reference artifacts and are not part of the PostgreSQL baseline manifest. Migrate populated SQL Server databases through a separately reviewed data-migration plan; do not execute those upgrade files against PostgreSQL.
 
 ## Prerequisites
 
-- PostgreSQL 17 database with the `vector` and `pg_stat_statements` extensions allowlisted.
+- PostgreSQL 17 database with the `vector`, `pg_stat_statements`, and `temporal_tables` extensions allowlisted.
 - A deployment identity permitted to create schemas, extensions, NOLOGIN roles, tables, functions, and grants.
 - `psql` available on the deployment workstation or runner.
 - TLS connectivity to the PostgreSQL endpoint; secrets supplied through `.pgpass`, `PGPASSFILE`, or the approved identity workflow.
@@ -40,6 +43,12 @@ Pass `-SeedMvpPolicies 1` only for approved QA environments. The default is fail
 
 The standalone script can be executed with any PostgreSQL client that preserves the transaction. It intentionally omits psql variables, so provisional policies remain disabled.
 
+## Manual deployment policy
+
+This repository does not contain a GitHub Actions workflow. Commits, pushes, and pull requests therefore do not validate or deploy the database through GitHub Actions. Run validation and deployment explicitly from an approved workstation or controlled deployment environment using the commands in this document.
+
+The Docker image and `container/run-migrations.sh` remain available for an operator-triggered Container Apps Job when private-network access is required. They are not invoked automatically by this repository.
+
 ## Architecture constraints preserved
 
 - Product ownership remains separated by domain schema; NLP consumes controlled projections and does not grant visibility or communication rights.
@@ -50,6 +59,10 @@ The standalone script can be executed with any PostgreSQL client that preserves 
 - NLP embeddings use `vector(1536)`. Exact bounded retrieval remains the baseline; add HNSW only after representative latency and recall evidence.
 - Partial unique indexes enforce active-row invariants. Nullable notification-policy scope uses `NULLS NOT DISTINCT`.
 - Runtime roles receive no DDL privileges. Append-only audit and authorization catalogs explicitly revoke destructive writes.
+- Mutable `row_version` resources capture `created_by` and `updated_by`. APIs call parameterized `ops.set_audit_context` inside each mutation transaction; the database login is the fail-safe fallback.
+- Connection acceptance, message creation, and message receipts atomically claim an actor-scoped idempotency key, persist the business change, append an outbox event and member-scoped sync changes, and cache the replay result.
+- Conversations are commit-time constrained to exactly the two connection members; read cursors and delivery/read receipts are conversation-bound and monotonic.
+- Azure PostgreSQL's allowlisted `temporal_tables` extension preserves full row versions for low-volume reference and policy tables in the read-only `history` schema. PII-rich content, messages, ciphertext, location presence, and transient processing data are intentionally excluded.
 
 ## Verification
 
@@ -58,3 +71,8 @@ The standalone script can be executed with any PostgreSQL client that preserves 
 ```
 
 `090_verify.sql` also runs inside the deployment transaction and rolls back the baseline if required objects, PostgreSQL-native types, validated constraints, valid indexes, or authorization seeds are missing.
+
+After a successful deployment, run `tests/verify_chat_atomicity.sql` with an approved migration-owner
+test connection. It exercises connection acceptance, message creation, receipt updates, exact replay,
+outbox/sync cardinality, participant rejection, read-cursor advancement, and immutable receipt times;
+the entire fixture is rolled back.

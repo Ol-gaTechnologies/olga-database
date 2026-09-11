@@ -32,9 +32,13 @@ CREATE TABLE IF NOT EXISTS iam.member_identity (
         provider_subject_ciphertext bytea NOT NULL, -- Encrypted normalized email/mobile or external subject.
         display_hint varchar(80) NULL, -- Masked support hint; never authoritative.
         is_primary boolean NOT NULL CONSTRAINT df_member_identity_is_primary DEFAULT (false), -- Primary sign-in identity flag.
+        status varchar(16) NOT NULL CONSTRAINT df_member_identity_status DEFAULT ('ACTIVE'), -- ACTIVE or REVOKED.
         verified_at timestamptz NULL, -- Verification completion.
         last_login_at timestamptz NULL, -- Security/account support signal.
+        revoked_at timestamptz NULL, -- Explicit identity disablement time.
         created_at timestamptz NOT NULL CONSTRAINT df_member_identity_created_at DEFAULT (CURRENT_TIMESTAMP), -- Creation time.
+        updated_at timestamptz NOT NULL CONSTRAINT df_member_identity_updated_at DEFAULT (CURRENT_TIMESTAMP), -- UTC last material update time.
+        row_version bigint NOT NULL DEFAULT 1, -- Optimistic concurrency token; never client supplied.
         CONSTRAINT pk_member_identity_ PRIMARY KEY (member_identity_id)
     );
 -- iam.permission: Controlled application permission catalog used by API authorization policies.
@@ -64,6 +68,7 @@ CREATE TABLE IF NOT EXISTS iam.role (
         name varchar(100) NOT NULL, -- Display name.
         description varchar(500) NULL, -- Scope and intended use.
         is_privileged boolean NOT NULL CONSTRAINT df_role_is_privileged DEFAULT (false), -- Requires elevated authentication and audit.
+        status varchar(16) NOT NULL CONSTRAINT df_role_status DEFAULT ('ACTIVE'), -- ACTIVE or RETIRED.
         created_at timestamptz NOT NULL CONSTRAINT df_role_created_at DEFAULT (CURRENT_TIMESTAMP), -- UTC creation time.
         updated_at timestamptz NOT NULL CONSTRAINT df_role_updated_at DEFAULT (CURRENT_TIMESTAMP), -- UTC last material update time.
         row_version bigint NOT NULL DEFAULT 1, -- Optimistic concurrency token; never client supplied.
@@ -280,6 +285,7 @@ CREATE TABLE IF NOT EXISTS event.venue (
         city varchar(120) NULL, -- City.
         coarse_geo_cell varchar(32) NULL, -- venue-level geohash/H3 cell; not member location.
         timezone_id varchar(64) NOT NULL, -- IANA/Windows mapping controlled by service.
+        status varchar(16) NOT NULL CONSTRAINT df_venue_status DEFAULT ('ACTIVE'), -- ACTIVE or RETIRED.
         created_at timestamptz NOT NULL CONSTRAINT df_venue_created_at DEFAULT (CURRENT_TIMESTAMP), -- UTC creation time.
         updated_at timestamptz NOT NULL CONSTRAINT df_venue_updated_at DEFAULT (CURRENT_TIMESTAMP), -- UTC last material update time.
         row_version bigint NOT NULL DEFAULT 1, -- Optimistic concurrency token; never client supplied.
@@ -451,6 +457,7 @@ CREATE TABLE IF NOT EXISTS chat.message (
         moderation_status varchar(24) NOT NULL CONSTRAINT df_message_moderation_status DEFAULT ('PENDING_OR_CLEAR'), -- Safety state.
         deleted_at timestamptz NULL, -- Logical removal time.
         created_at timestamptz NOT NULL CONSTRAINT df_message_created_at DEFAULT (CURRENT_TIMESTAMP), -- Authoritative send time.
+        updated_at timestamptz NOT NULL CONSTRAINT df_message_updated_at DEFAULT (CURRENT_TIMESTAMP), -- Last moderation/deletion change.
         row_version bigint NOT NULL DEFAULT 1, -- Concurrency token.
         CONSTRAINT pk_message_ PRIMARY KEY (message_id)
     );
@@ -637,6 +644,8 @@ CREATE TABLE IF NOT EXISTS nlp.nlp_model_version (
         status varchar(20) NOT NULL CONSTRAINT df_nlp_model_version_status DEFAULT ('CANDIDATE'), -- CANDIDATE, ACTIVE, RETIRED, ROLLED_BACK.
         activated_at timestamptz NULL, -- Promotion time.
         created_at timestamptz NOT NULL CONSTRAINT df_nlp_model_version_created_at DEFAULT (CURRENT_TIMESTAMP), -- Registration time.
+        updated_at timestamptz NOT NULL CONSTRAINT df_nlp_model_version_updated_at DEFAULT (CURRENT_TIMESTAMP), -- UTC last material update time.
+        row_version bigint NOT NULL DEFAULT 1, -- Optimistic concurrency token; never client supplied.
         CONSTRAINT pk_nlp_model_version_ PRIMARY KEY (model_version)
     );
 -- nlp.nlp_ranking_config: Versioned ranking weights, threshold and policy switches.
@@ -652,6 +661,9 @@ CREATE TABLE IF NOT EXISTS nlp.nlp_ranking_config (
         active_from timestamptz NOT NULL, -- Effective time.
         active_to timestamptz NULL, -- Retirement time.
         config_json jsonb NULL, -- Bounded extra rule settings.
+        created_at timestamptz NOT NULL CONSTRAINT df_nlp_ranking_config_created_at DEFAULT (CURRENT_TIMESTAMP), -- UTC creation time.
+        updated_at timestamptz NOT NULL CONSTRAINT df_nlp_ranking_config_updated_at DEFAULT (CURRENT_TIMESTAMP), -- UTC last material update time.
+        row_version bigint NOT NULL DEFAULT 1, -- Optimistic concurrency token; never client supplied.
         CONSTRAINT pk_nlp_ranking_config_ PRIMARY KEY (ranking_version)
     );
 -- nlp.nlp_processing_job: Intent embedding and re-embedding retry state.
@@ -896,13 +908,13 @@ CREATE TABLE IF NOT EXISTS ops.outbox_event (
 CREATE TABLE IF NOT EXISTS ops.idempotency_record (
         scope varchar(64) NOT NULL, -- API/operation scope.
         idempotency_key varchar(128) NOT NULL, -- Client key.
-        actor_id varchar(64) NOT NULL, -- Authenticated member/service.
+        actor_id varchar(64) NOT NULL, -- Authenticated member/service; part of the replay boundary.
         request_hash char(64) NOT NULL, -- Detect key reuse with different body.
         status_code smallint NULL, -- Cached response status.
         response_ref varchar(1000) NULL, -- Bounded response or resource reference.
         created_at timestamptz NOT NULL CONSTRAINT df_idempotency_record_created_at DEFAULT (CURRENT_TIMESTAMP), -- First request.
         expires_at timestamptz NOT NULL, -- Purge time.
-        CONSTRAINT pk_idempotency_record_ PRIMARY KEY (scope, idempotency_key)
+        CONSTRAINT pk_idempotency_record_ PRIMARY KEY (scope, actor_id, idempotency_key)
     );
 -- ops.background_job: Non-NLP background task lifecycle.
 CREATE TABLE IF NOT EXISTS ops.background_job (

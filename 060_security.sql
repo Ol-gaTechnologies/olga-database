@@ -27,13 +27,24 @@ $$;
 
 GRANT USAGE ON SCHEMA admin TO olga_admin_reader;
 GRANT SELECT ON admin.vw_member_review TO olga_admin_reader;
+REVOKE ALL ON SCHEMA history FROM PUBLIC;
+REVOKE ALL ON ALL TABLES IN SCHEMA history FROM PUBLIC;
+GRANT USAGE ON SCHEMA history TO olga_admin_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA history TO olga_admin_reader;
+GRANT USAGE ON SCHEMA ops TO olga_core_app, olga_identity_app, olga_consent_app, olga_event_app,
+    olga_social_app, olga_chat_app, olga_storage_app, olga_notification_app, olga_nlp_app,
+    olga_moderation_app, olga_analytics_writer;
+GRANT EXECUTE ON FUNCTION ops.set_audit_context(varchar), ops.current_audit_actor_id()
+    TO olga_core_app, olga_identity_app, olga_consent_app, olga_event_app, olga_social_app,
+       olga_chat_app, olga_storage_app, olga_notification_app, olga_nlp_app,
+       olga_moderation_app, olga_analytics_writer;
 GRANT SELECT ON nlp.vw_member_context_eligibility, nlp.vw_member_relationship TO olga_nlp_app;
 GRANT SELECT ON chat.vw_authorized_conversation TO olga_chat_app;
 GRANT SELECT ON iam.member TO olga_notification_app;
 GRANT SELECT ON core.member_profile, consent.member_consent TO olga_nlp_app;
 GRANT SELECT ON event.event_matching_policy TO olga_notification_app;
 GRANT INSERT ON ops.outbox_event TO olga_social_app, olga_chat_app, olga_notification_app, olga_storage_app;
-GRANT SELECT, INSERT ON chat.conversation, chat.conversation_participant TO olga_social_app;
+GRANT SELECT ON chat.conversation, chat.conversation_participant TO olga_social_app;
 GRANT INSERT ON ops.background_job TO olga_storage_app, olga_consent_app;
 GRANT INSERT ON moderation.content_scan TO olga_storage_app;
 GRANT INSERT ON ops.audit_event TO olga_identity_app, olga_consent_app, olga_storage_app, olga_moderation_app;
@@ -46,3 +57,9 @@ REVOKE INSERT, UPDATE, DELETE ON ops.retention_policy FROM olga_ops_worker;
 REVOKE DELETE ON ops.retention_execution FROM olga_ops_worker;
 REVOKE DELETE ON consent.privacy_request, consent.privacy_request_task FROM olga_consent_app;
 REVOKE DELETE ON iam.role, iam.permission, iam.role_permission, iam.member_role FROM olga_identity_app;
+
+-- Atomic chat/connection workflows are function-only. Direct DML would bypass the
+-- idempotency record, transactional outbox and member-scoped sync ledger.
+REVOKE INSERT, UPDATE, DELETE ON social.connection FROM olga_social_app;
+REVOKE INSERT, UPDATE, DELETE ON chat.conversation, chat.conversation_participant,
+    chat.message, chat.message_receipt FROM olga_chat_app;

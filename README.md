@@ -17,6 +17,8 @@ schemas inside one database.
 - `tests/verify_chat_atomicity.sql` and `tests/verify_temporal_history.sql`: rollback-only
   integration tests for a development/test database.
 - `docs/dbeaver-deployment.md`: concise deployment and recovery runbook.
+- `docs/database-requirements-and-table-guide.md`: team guide to product requirements, table purposes,
+  relationships and protected workflows.
 - `docs/architecture-decisions-v2.4.md`: security, lifecycle, history and matching decisions that
   are not self-evident from the DDL.
 

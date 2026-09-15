@@ -14,6 +14,8 @@ schemas inside one database.
 - `070_bind_identities.template.sql`: separately executed template for pre-provisioned Azure
   identities.
 - `tests/validate_static.py`: static consistency and architecture validation.
+- `tests/seed_test_data.sql`: rerunnable development/test fixture with at least one coherent row in
+  every application table; never run it in production.
 - `tests/verify_chat_atomicity.sql` and `tests/verify_temporal_history.sql`: rollback-only
   integration tests for a development/test database.
 - `docs/dbeaver-deployment.md`: concise deployment and recovery runbook.
@@ -63,10 +65,12 @@ transaction.
 
 On development/test only, execute these with a migration-owner connection:
 
-1. `tests/verify_temporal_history.sql`
-2. `tests/verify_chat_atomicity.sql`
+1. `tests/seed_test_data.sql` to populate persistent development/test fixture data (optional).
+2. `tests/verify_temporal_history.sql`
+3. `tests/verify_chat_atomicity.sql`
 
-Both tests are self-contained and finish with `ROLLBACK`.
+The verification tests are self-contained and finish with `ROLLBACK`; the seed script commits its
+fixture rows and is safe to rerun.
 
 ## Guardrails
 
